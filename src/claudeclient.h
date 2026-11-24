@@ -41,6 +41,10 @@ public:
     QVariantList messages() const { return m_messages; }
     QString streamText() const { return m_streamText; }
 
+    // For CodeClient (same login).
+    QString sessionKey() const { return m_sessionKey; }
+    QString orgId() const { return m_org; }
+
     Q_INVOKABLE void setSessionKey(const QString &key);
     Q_INVOKABLE void logout();
     Q_INVOKABLE void connectAccount();
