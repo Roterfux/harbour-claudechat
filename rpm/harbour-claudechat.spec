@@ -1,5 +1,5 @@
 Name:       harbour-claudechat
-Version:    0.1.2
+Version:    0.1.3
 Release:    1
 Summary:    Claude chat (claude.ai wrapper)
 License:    BSD
