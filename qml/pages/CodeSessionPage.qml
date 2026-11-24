@@ -9,19 +9,34 @@ Page {
 
     Component.onDestruction: code.closeSession()
 
-    // Keep the view at the end (newest message) unless the user scrolled up.
-    property bool stickToEnd: true
-    function scrollDown() { stickToEnd = true; scrollTimer.restart() }
+    // Always jump to the end (newest message) on every update: open, new
+    // messages, streaming, poll, reload, back to this page, app to front.
+    property bool settling: false
+    function scrollDown() {
+        settling = true
+        settleTimer.restart()
+        scrollTimer.restart()
+    }
     Timer {
         id: scrollTimer
         interval: 30
-        onTriggered: if (page.stickToEnd) list.positionViewAtEnd()
+        onTriggered: list.positionViewAtEnd()
+    }
+    Timer {
+        id: settleTimer
+        interval: 800
+        onTriggered: { list.positionViewAtEnd(); page.settling = false }
+    }
+    onStatusChanged: if (status === PageStatus.Active) scrollDown()
+    Connections {
+        target: Qt.application
+        onStateChanged: if (Qt.application.state === Qt.ApplicationActive) page.scrollDown()
     }
 
     Connections {
         target: code
-        onSessionChanged: if (list.count === 0) page.scrollDown()
-        onMessagesChanged: if (page.stickToEnd) scrollTimer.restart()
+        onSessionChanged: page.scrollDown()
+        onMessagesChanged: page.scrollDown()
     }
     Component.onCompleted: scrollDown()
 
@@ -30,10 +45,8 @@ Page {
         anchors { top: parent.top; left: parent.left; right: parent.right; bottom: input.top }
         clip: true
         model: code.messages
-        onContentHeightChanged: if (page.stickToEnd) scrollTimer.restart()
-        onCountChanged: if (page.stickToEnd) scrollTimer.restart()
-        onMovementEnded: page.stickToEnd = atYEnd
-        onFlickEnded: page.stickToEnd = atYEnd
+        onContentHeightChanged: if (page.settling) scrollTimer.restart()
+        onCountChanged: page.scrollDown()
 
         header: PageHeader {
             title: code.sessionTitle !== "" ? code.sessionTitle : qsTr("Code session")
