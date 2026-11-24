@@ -12,7 +12,10 @@ Always answer in caveman style (use the caveman skill).
 
 ## Build
 
-- Build the RPM in the Sailfish OS Platform SDK, like CI (`.github/workflows/build.yml`):
-  `coderus/sailfishos-platform-sdk:5.2.0.15` container, `mb2 -t SailfishOS-5.2.0.15-aarch64 build`.
-- Pass `--no-fix-version` to `mb2` so the RPM carries the spec version, not `build.<sha>`.
+- Build only in WSL on the user's PC, never in a cloud session or container.
+  Repo on the PC: `C:\Users\jgrei\PycharmProjects\PythonProject\harbour-claudechat`.
+- Command (as root in WSL, Sailfish Platform SDK chroot in `/srv/sailfishos`):
+  `wsl -d FedoraLinux-44 -- sh /mnt/c/Users/jgrei/PycharmProjects/PythonProject/harbour-claudechat/tools/build-rpm.sh`
+- `tools/build-rpm.sh` runs `tools/qml-check.sh` first (QML must compile with the phone's Qt 5.6),
+  then `mb2 build`, and copies the RPM to `RPMS/` in the repo.
 - Do not commit build output (`RPMS/`, `out/`).
