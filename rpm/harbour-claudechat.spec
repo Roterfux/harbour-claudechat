@@ -1,11 +1,12 @@
 Name:       harbour-claudechat
-Version:    0.3.0
+Version:    0.5.1
 Release:    1
 Summary:    Native Claude chat for claude.ai accounts
 License:    BSD
 URL:        https://github.com/Roterfux/harbour-claudechat
 Source0:    %{name}-%{version}.tar.bz2
 Requires:   sailfishsilica-qt5 >= 0.10.9
+Requires:   nemo-qml-plugin-notifications-qt5
 BuildRequires: pkgconfig(sailfishapp) >= 1.0.2
 BuildRequires: pkgconfig(Qt5Core)
 BuildRequires: pkgconfig(Qt5Qml)

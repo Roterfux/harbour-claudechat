@@ -5,20 +5,46 @@ Page {
     id: page
     allowedOrientations: Orientation.All
 
-    function scrollDown() { list.positionViewAtEnd() }
+    // Always jump to the end (newest message) on every update: open, new
+    // messages, streaming, poll, reload, back to this page, app to front.
+    property bool settling: false
+    function scrollDown() {
+        settling = true
+        settleTimer.restart()
+        scrollTimer.restart()
+    }
+    Timer {
+        id: scrollTimer
+        interval: 30
+        onTriggered: list.positionViewAtEnd()
+    }
+    Timer {
+        id: settleTimer
+        interval: 800
+        onTriggered: { list.positionViewAtEnd(); page.settling = false }
+    }
+    onStatusChanged: if (status === PageStatus.Active) scrollDown()
+    Connections {
+        target: Qt.application
+        onStateChanged: if (Qt.application.state === Qt.ApplicationActive) page.scrollDown()
+    }
 
     Connections {
         target: claude
-        onMessagesChanged: scrollTimer.restart()
-        onStreamTextChanged: if (list.atYEnd || claude.streamText.length < 2) scrollTimer.restart()
+        onConversationChanged: page.scrollDown()
+        onMessagesChanged: page.scrollDown()
+        onStreamTextChanged: page.scrollDown()
+        onSendingChanged: page.scrollDown()
     }
-    Timer { id: scrollTimer; interval: 50; onTriggered: page.scrollDown() }
+    Component.onCompleted: scrollDown()
 
     SilicaListView {
         id: list
         anchors { top: parent.top; left: parent.left; right: parent.right; bottom: input.top }
         clip: true
         model: claude.messages
+        onContentHeightChanged: if (page.settling) scrollTimer.restart()
+        onCountChanged: page.scrollDown()
 
         header: PageHeader {
             title: claude.conversationName !== "" ? claude.conversationName
@@ -100,6 +126,7 @@ Page {
                     claude.stop()
                 } else {
                     claude.send(field.text)
+                    page.scrollDown()
                     field.text = ""
                 }
             }
