@@ -1,5 +1,5 @@
 Name:       harbour-claudechat
-Version:    0.3.0
+Version:    0.4.0
 Release:    1
 Summary:    Native Claude chat for claude.ai accounts
 License:    BSD
