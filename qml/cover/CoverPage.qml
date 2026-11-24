@@ -11,7 +11,7 @@ CoverBackground {
     }
     Label {
         anchors { bottom: parent.bottom; left: parent.left; right: parent.right; margins: Theme.paddingLarge }
-        text: app.pageTitle !== "" ? app.pageTitle : qsTr("Claude Chat")
+        text: claude.conversationName !== "" ? claude.conversationName : qsTr("Claude Chat")
         horizontalAlignment: Text.AlignHCenter
         truncationMode: TruncationMode.Fade
         font.pixelSize: Theme.fontSizeSmall
