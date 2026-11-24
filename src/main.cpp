@@ -5,6 +5,7 @@
 #include <sailfishapp.h>
 
 #include "claudeclient.h"
+#include "codeclient.h"
 
 int main(int argc, char *argv[])
 {
@@ -13,9 +14,11 @@ int main(int argc, char *argv[])
     app->setApplicationName(QStringLiteral("harbour-claudechat"));
 
     ClaudeClient client;
+    CodeClient code(&client);
 
     QScopedPointer<QQuickView> view(SailfishApp::createView());
     view->rootContext()->setContextProperty(QStringLiteral("claude"), &client);
+    view->rootContext()->setContextProperty(QStringLiteral("code"), &code);
     view->setSource(SailfishApp::pathToMainQml());
     view->show();
 
