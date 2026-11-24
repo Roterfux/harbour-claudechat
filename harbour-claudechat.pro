@@ -4,9 +4,11 @@ CONFIG += sailfishapp
 QT += network
 
 SOURCES += src/main.cpp \
-    src/claudeclient.cpp
+    src/claudeclient.cpp \
+    src/codeclient.cpp
 
-HEADERS += src/claudeclient.h
+HEADERS += src/claudeclient.h \
+    src/codeclient.h
 
 DISTFILES += \
     harbour-claudechat.desktop \

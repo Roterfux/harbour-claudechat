@@ -1,41 +1,92 @@
 import QtQuick 2.2
 import Sailfish.Silica 1.0
 
+// Start page: switch between normal claude.ai chats ("Claude") and
+// Claude Code sessions ("Code").
 Page {
     id: page
     allowedOrientations: Orientation.All
+    property bool codeMode: false
 
     function openChat(uuid) {
         if (uuid) claude.openConversation(uuid)
         else claude.newConversation()
         pageStack.push(Qt.resolvedUrl("ChatPage.qml"))
     }
+    function openSession(id) {
+        code.openSession(id)
+        pageStack.push(Qt.resolvedUrl("CodeSessionPage.qml"))
+    }
+    function refresh() {
+        if (!claude.loggedIn) claude.connectAccount()
+        else if (codeMode) code.refreshSessions()
+        else claude.refreshConversations()
+    }
+
+    onCodeModeChanged: if (codeMode && code.sessions.length === 0) code.refreshSessions()
 
     SilicaListView {
         id: list
         anchors.fill: parent
-        model: claude.conversations
+        model: page.codeMode ? code.sessions : claude.conversations
 
-        header: PageHeader {
-            title: qsTr("Claude")
-            description: claude.account
+        header: Column {
+            width: list.width
+            PageHeader {
+                title: page.codeMode ? qsTr("Code") : qsTr("Claude")
+                description: claude.account
+            }
+            // Claude | Code switch
+            Row {
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * Theme.horizontalPageMargin
+                height: Theme.itemSizeSmall
+                Repeater {
+                    model: [ { label: qsTr("Claude"), code: false }, { label: qsTr("Code"), code: true } ]
+                    BackgroundItem {
+                        width: parent.width / 2
+                        height: parent.height
+                        highlighted: down || page.codeMode === modelData.code
+                        onClicked: page.codeMode = modelData.code
+                        Label {
+                            anchors.centerIn: parent
+                            text: modelData.label
+                            font.bold: page.codeMode === modelData.code
+                            color: page.codeMode === modelData.code ? Theme.highlightColor : Theme.primaryColor
+                        }
+                        Rectangle {
+                            anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
+                            height: Theme.paddingSmall / 2
+                            color: Theme.highlightColor
+                            visible: page.codeMode === modelData.code
+                        }
+                    }
+                }
+            }
+            Item { width: 1; height: Theme.paddingMedium }
         }
 
         PullDownMenu {
-            busy: claude.busy
+            busy: claude.busy || code.busy
             MenuItem {
                 text: qsTr("Log out")
                 onClicked: remorse.execute(qsTr("Logging out"), function() {
+                    code.closeSession()
                     claude.logout()
                     pageStack.replace(Qt.resolvedUrl("LoginPage.qml"))
                 })
             }
             MenuItem {
+                text: page.codeMode ? qsTr("Show Claude chats") : qsTr("Show Code sessions")
+                onClicked: page.codeMode = !page.codeMode
+            }
+            MenuItem {
                 text: qsTr("Refresh")
-                onClicked: claude.loggedIn ? claude.refreshConversations() : claude.connectAccount()
+                onClicked: page.refresh()
             }
             MenuItem {
                 text: qsTr("New chat")
+                visible: !page.codeMode
                 enabled: claude.loggedIn
                 onClicked: page.openChat("")
             }
@@ -43,39 +94,59 @@ Page {
 
         delegate: ListItem {
             id: item
-            contentHeight: Theme.itemSizeSmall
-            menu: ContextMenu {
-                MenuItem {
-                    text: qsTr("Delete")
-                    onClicked: {
-                        var uuid = modelData.uuid
-                        item.remorseAction(qsTr("Deleting"), function() { claude.deleteConversation(uuid) })
-                    }
-                }
-            }
-            onClicked: page.openChat(modelData.uuid)
+            contentHeight: page.codeMode ? Theme.itemSizeMedium : Theme.itemSizeSmall
+            menu: page.codeMode ? null : deleteMenu
+            onClicked: page.codeMode ? page.openSession(modelData.id) : page.openChat(modelData.uuid)
 
-            Label {
+            Column {
                 x: Theme.horizontalPageMargin
                 width: parent.width - 2 * Theme.horizontalPageMargin
                 anchors.verticalCenter: parent.verticalCenter
-                text: modelData.name !== "" ? modelData.name : qsTr("Untitled chat")
-                truncationMode: TruncationMode.Fade
-                color: item.highlighted ? Theme.highlightColor : Theme.primaryColor
+                Label {
+                    width: parent.width
+                    text: page.codeMode ? (modelData.title !== "" ? modelData.title : qsTr("Untitled session"))
+                                        : (modelData.name !== "" ? modelData.name : qsTr("Untitled chat"))
+                    truncationMode: TruncationMode.Fade
+                    color: item.highlighted ? Theme.highlightColor : Theme.primaryColor
+                }
+                Label {
+                    visible: page.codeMode
+                    width: parent.width
+                    text: page.codeMode ? modelData.status + "  " + modelData.updatedAt.substring(0, 16).replace("T", " ") : ""
+                    font.pixelSize: Theme.fontSizeExtraSmall
+                    color: Theme.secondaryColor
+                    truncationMode: TruncationMode.Fade
+                }
+            }
+
+            Component {
+                id: deleteMenu
+                ContextMenu {
+                    MenuItem {
+                        text: qsTr("Delete")
+                        onClicked: {
+                            var uuid = modelData.uuid
+                            item.remorseAction(qsTr("Deleting"), function() { claude.deleteConversation(uuid) })
+                        }
+                    }
+                }
             }
         }
 
         ViewPlaceholder {
-            enabled: list.count === 0 && !claude.busy
-            text: claude.error !== "" ? claude.error
-                                      : (claude.loggedIn ? qsTr("No chats yet") : qsTr("Not connected"))
-            hintText: claude.loggedIn ? qsTr("Pull down to start a new chat") : qsTr("Pull down to retry")
+            property string err: page.codeMode ? code.error : claude.error
+            enabled: list.count === 0 && !claude.busy && !code.busy
+            text: err !== "" ? err
+                             : (!claude.loggedIn ? qsTr("Not connected")
+                                                 : (page.codeMode ? qsTr("No Code sessions") : qsTr("No chats yet")))
+            hintText: page.codeMode ? qsTr("Pull down to refresh")
+                                    : (claude.loggedIn ? qsTr("Pull down to start a new chat") : qsTr("Pull down to retry"))
         }
 
         BusyIndicator {
             anchors.centerIn: parent
             size: BusyIndicatorSize.Large
-            running: claude.busy && list.count === 0
+            running: (claude.busy || code.busy) && list.count === 0
         }
 
         VerticalScrollDecorator {}

@@ -431,6 +431,8 @@ void ClaudeClient::startCompletion(const QString &text)
             answer[QStringLiteral("text")] = m_streamText;
             m_messages << answer;
             emit messagesChanged();
+            if (!aborted)
+                emit answerFinished(m_conversationName, m_streamText);
         }
         m_streamText.clear();
         emit streamTextChanged();

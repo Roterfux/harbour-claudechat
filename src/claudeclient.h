@@ -41,6 +41,10 @@ public:
     QVariantList messages() const { return m_messages; }
     QString streamText() const { return m_streamText; }
 
+    // For CodeClient (same login).
+    QString sessionKey() const { return m_sessionKey; }
+    QString orgId() const { return m_org; }
+
     Q_INVOKABLE void setSessionKey(const QString &key);
     Q_INVOKABLE void logout();
     Q_INVOKABLE void connectAccount();
@@ -62,6 +66,7 @@ signals:
     void messagesChanged();
     void streamTextChanged();
     void sessionInvalid();
+    void answerFinished(const QString &chatName, const QString &text);
 
 private:
     QNetworkRequest request(const QString &path, bool json = false) const;
