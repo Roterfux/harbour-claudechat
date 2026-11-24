@@ -65,10 +65,22 @@ QString ClaudeClient::orgPath() const
 
 void ClaudeClient::setSessionKey(const QString &key)
 {
-    QString k = key.trimmed();
-    if (k.startsWith(QLatin1String("sessionKey=")))
-        k = k.mid(11);
-    m_sessionKey = k;
+    // Accepts the bare value, "sessionKey=...", or a whole Cookie header;
+    // drops spaces, line breaks and quotes picked up while copying.
+    QString k = key;
+    const int at = k.indexOf(QLatin1String("sessionKey="));
+    if (at >= 0) {
+        k = k.mid(at + 11);
+        const int end = k.indexOf(QLatin1Char(';'));
+        if (end >= 0)
+            k = k.left(end);
+    }
+    QString clean;
+    for (const QChar c : k) {
+        if (!c.isSpace() && c != QLatin1Char('"') && c != QLatin1Char('\''))
+            clean += c;
+    }
+    m_sessionKey = clean;
     QDir().mkpath(QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation));
     {
         QSettings s(settingsPath(), QSettings::IniFormat);
@@ -104,12 +116,14 @@ void ClaudeClient::logout()
 QNetworkRequest ClaudeClient::request(const QString &path, bool json) const
 {
     QNetworkRequest req(QUrl(BaseUrl + path));
+    // Only the session cookie, like a plain request with curl. Web-client
+    // headers (anthropic-client-platform, Origin) make claude.ai expect
+    // more than the cookie and answer "Invalid authorization".
     req.setRawHeader("Cookie", "sessionKey=" + m_sessionKey.toUtf8());
     req.setRawHeader("User-Agent", UserAgent);
-    req.setRawHeader("Origin", BaseUrl.toUtf8());
-    req.setRawHeader("Referer", (BaseUrl + QStringLiteral("/")).toUtf8());
-    req.setRawHeader("anthropic-client-platform", "web_claude_ai");
     req.setRawHeader("Accept", "application/json");
+    req.setAttribute(QNetworkRequest::CookieLoadControlAttribute, QNetworkRequest::Manual);
+    req.setAttribute(QNetworkRequest::CookieSaveControlAttribute, QNetworkRequest::Manual);
     if (json)
         req.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
     return req;
@@ -149,6 +163,8 @@ bool ClaudeClient::checkReply(QNetworkReply *reply, QByteArray *data)
         msg = err.value(QStringLiteral("message")).toString();
     if (msg.isEmpty())
         msg = status ? QStringLiteral("HTTP %1").arg(status) : reply->errorString();
+    if (status)
+        msg += QStringLiteral(" (HTTP %1, %2)").arg(status).arg(reply->url().path());
     setError(msg);
 
     if (status == 401 || (status == 403 && err.value(QStringLiteral("details")).toObject()
