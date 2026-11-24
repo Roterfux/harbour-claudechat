@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QVariantList>
 #include <QNetworkAccessManager>
+#include <QHash>
 #include <QTimer>
 
 class ClaudeClient;
@@ -46,6 +47,8 @@ signals:
     void sessionsChanged();
     void sessionChanged();
     void messagesChanged();
+    // A session that was running stopped (finished, waiting for input, failed).
+    void sessionFinished(const QString &sessionUuid, const QString &title, const QString &status);
 
 private:
     QNetworkRequest request(const QString &path, bool json = false) const;
@@ -53,12 +56,15 @@ private:
     void setBusy(bool on);
     void setError(const QString &error);
     void loadSession(bool quiet);
+    void fetchSessions(bool quiet);
     void loadEvents(const QString &afterId, bool quiet);
     void addEvents(const QVariantList &events);
 
     ClaudeClient *m_claude;
     QNetworkAccessManager m_nam;
     QTimer m_poll;
+    QTimer m_watch;
+    QHash<QString, QString> m_lastStatus;   // session id -> status
     int m_busy = 0;
     QString m_error;
     QVariantList m_sessions;

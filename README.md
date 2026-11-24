@@ -22,6 +22,8 @@ claude.ai login, stored once, for every request.
 - Delete a chat (long press), copy a message (long press).
 - Claude | Code switch: Claude Code sessions (claude.ai/code): list, read messages and tool calls
   (refreshed while open), send a message into a session, open it in the browser.
+- Notifications: Claude answered (app in the background); a Code session stopped running
+  (checked every 30 s while the app runs).
 
 Uses the private API of the claude.ai web client; claude.ai can change it at any time.
 

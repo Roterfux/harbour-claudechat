@@ -54,9 +54,18 @@ CodeClient::CodeClient(ClaudeClient *claude, QObject *parent)
     // keeps working in the cloud after a message was sent).
     m_poll.setInterval(4000);
     connect(&m_poll, &QTimer::timeout, this, [this]() { loadSession(true); });
+    // Watch all sessions in the background (also while the app is in the
+    // background) to notify when one stops running.
+    m_watch.setInterval(30000);
+    connect(&m_watch, &QTimer::timeout, this, [this]() { fetchSessions(true); });
     connect(m_claude, &ClaudeClient::loggedInChanged, this, [this]() {
-        if (m_claude->loggedIn())
+        if (m_claude->loggedIn()) {
             refreshSessions();
+            m_watch.start();
+        } else {
+            m_watch.stop();
+            m_lastStatus.clear();
+        }
     });
 }
 
@@ -116,11 +125,19 @@ void CodeClient::setError(const QString &error)
 
 void CodeClient::refreshSessions()
 {
+    fetchSessions(false);
+}
+
+void CodeClient::fetchSessions(bool quiet)
+{
     if (m_claude->orgId().isEmpty())
         return;
-    setBusy(true);
+    if (!quiet)
+        setBusy(true);
     QNetworkReply *r = m_nam.get(request(QStringLiteral("/v1/sessions?limit=50")));
-    connect(r, &QNetworkReply::finished, this, [this, r]() {
+    connect(r, &QNetworkReply::finished, this, [this, r, quiet]() {
+        if (quiet)
+            setBusy(true);   // balanced by checkReply
         QByteArray data;
         if (!checkReply(r, &data))
             return;
@@ -136,6 +153,13 @@ void CodeClient::refreshSessions()
             m[QStringLiteral("status")] = str(s, "session_status");
             m[QStringLiteral("updatedAt")] = str(s, "updated_at");
             m_sessions << m;
+
+            const QString id = str(s, "id");
+            const QString status = str(s, "session_status");
+            const QString before = m_lastStatus.value(id);
+            if (before == QLatin1String("running") && status != before && !status.isEmpty())
+                emit sessionFinished(id, str(s, "title"), status);
+            m_lastStatus.insert(id, status);
         }
         emit sessionsChanged();
     });
@@ -187,6 +211,11 @@ void CodeClient::loadSession(bool quiet)
         const QJsonObject s = QJsonDocument::fromJson(data).object();
         const QString title = s.value(QStringLiteral("title")).toString();
         const QString status = s.value(QStringLiteral("session_status")).toString();
+        if (m_sessionStatus == QLatin1String("running") && status != m_sessionStatus && !status.isEmpty()
+                && m_lastStatus.value(id) == QLatin1String("running"))
+            emit sessionFinished(id, title.isEmpty() ? m_sessionTitle : title, status);
+        if (!status.isEmpty())
+            m_lastStatus.insert(id, status);
         if (title != m_sessionTitle || status != m_sessionStatus) {
             if (!title.isEmpty())
                 m_sessionTitle = title;
