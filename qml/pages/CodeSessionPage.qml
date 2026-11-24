@@ -9,17 +9,31 @@ Page {
 
     Component.onDestruction: code.closeSession()
 
+    // Keep the view at the end (newest message) unless the user scrolled up.
+    property bool stickToEnd: true
+    function scrollDown() { stickToEnd = true; scrollTimer.restart() }
+    Timer {
+        id: scrollTimer
+        interval: 30
+        onTriggered: if (page.stickToEnd) list.positionViewAtEnd()
+    }
+
     Connections {
         target: code
-        onMessagesChanged: if (list.atYEnd || list.count < 3) scrollTimer.restart()
+        onSessionChanged: if (list.count === 0) page.scrollDown()
+        onMessagesChanged: if (page.stickToEnd) scrollTimer.restart()
     }
-    Timer { id: scrollTimer; interval: 50; onTriggered: list.positionViewAtEnd() }
+    Component.onCompleted: scrollDown()
 
     SilicaListView {
         id: list
         anchors { top: parent.top; left: parent.left; right: parent.right; bottom: input.top }
         clip: true
         model: code.messages
+        onContentHeightChanged: if (page.stickToEnd) scrollTimer.restart()
+        onCountChanged: if (page.stickToEnd) scrollTimer.restart()
+        onMovementEnded: page.stickToEnd = atYEnd
+        onFlickEnded: page.stickToEnd = atYEnd
 
         header: PageHeader {
             title: code.sessionTitle !== "" ? code.sessionTitle : qsTr("Code session")
@@ -112,6 +126,7 @@ Page {
             enabled: field.text.trim() !== "" && code.sessionId !== ""
             onClicked: {
                 code.send(field.text)
+                page.scrollDown()
                 field.text = ""
             }
         }

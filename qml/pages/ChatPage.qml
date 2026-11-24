@@ -5,20 +5,32 @@ Page {
     id: page
     allowedOrientations: Orientation.All
 
-    function scrollDown() { list.positionViewAtEnd() }
+    // Keep the view at the end (newest message) unless the user scrolled up.
+    property bool stickToEnd: true
+    function scrollDown() { stickToEnd = true; scrollTimer.restart() }
+    Timer {
+        id: scrollTimer
+        interval: 30
+        onTriggered: if (page.stickToEnd) list.positionViewAtEnd()
+    }
 
     Connections {
         target: claude
-        onMessagesChanged: scrollTimer.restart()
-        onStreamTextChanged: if (list.atYEnd || claude.streamText.length < 2) scrollTimer.restart()
+        onConversationChanged: page.scrollDown()
+        onMessagesChanged: if (page.stickToEnd) scrollTimer.restart()
+        onStreamTextChanged: if (page.stickToEnd) scrollTimer.restart()
     }
-    Timer { id: scrollTimer; interval: 50; onTriggered: page.scrollDown() }
+    Component.onCompleted: scrollDown()
 
     SilicaListView {
         id: list
         anchors { top: parent.top; left: parent.left; right: parent.right; bottom: input.top }
         clip: true
         model: claude.messages
+        onContentHeightChanged: if (page.stickToEnd) scrollTimer.restart()
+        onCountChanged: if (page.stickToEnd) scrollTimer.restart()
+        onMovementEnded: page.stickToEnd = atYEnd
+        onFlickEnded: page.stickToEnd = atYEnd
 
         header: PageHeader {
             title: claude.conversationName !== "" ? claude.conversationName
@@ -100,6 +112,7 @@ Page {
                     claude.stop()
                 } else {
                     claude.send(field.text)
+                    page.scrollDown()
                     field.text = ""
                 }
             }
