@@ -51,12 +51,19 @@ jobs:
         with:
           path: rpms
           merge-multiple: true
-      - name: Publish pre-release
+      - name: Publish release (tag v*) or pre-release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="build-${GITHUB_SHA::7}"
-          gh release create "$TAG" rpms/*.rpm \
-            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-            --prerelease --title "Test build ${GITHUB_SHA::7} (SFOS ${SFOS_RELEASE})" \
-            --notes "Automatic test build from ${GITHUB_REF_NAME}. claude.ai wrapper; log in or set the session cookie via the menu button."
+          if [ "$GITHUB_REF_TYPE" = tag ] && [ "${GITHUB_REF_NAME#v}" != "$GITHUB_REF_NAME" ]; then
+            gh release create "$GITHUB_REF_NAME" rpms/*.rpm \
+              --repo "$GITHUB_REPOSITORY" --verify-tag \
+              --title "harbour-claudechat ${GITHUB_REF_NAME#v}" \
+              --notes "Native claude.ai client for Sailfish OS ${SFOS_RELEASE}. Paste the claude.ai sessionKey cookie once on first start. Install: devel-su pkcon install-local harbour-claudechat-${GITHUB_REF_NAME#v}-1.aarch64.rpm"
+          else
+            TAG="build-${GITHUB_SHA::7}"
+            gh release create "$TAG" rpms/*.rpm \
+              --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+              --prerelease --title "Test build ${GITHUB_SHA::7} (SFOS ${SFOS_RELEASE})" \
+              --notes "Automatic test build from ${GITHUB_REF_NAME}. Native claude.ai client; paste the sessionKey cookie on first start."
+          fi
