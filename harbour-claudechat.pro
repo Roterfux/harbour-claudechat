@@ -13,6 +13,7 @@ DISTFILES += \
     qml/harbour-claudechat.qml \
     qml/cover/*.qml \
     qml/pages/*.qml \
+    qml/js/*.js \
     rpm/harbour-claudechat.spec
 
 icons86.files = icons/86x86/harbour-claudechat.png
