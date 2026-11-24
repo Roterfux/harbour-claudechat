@@ -18,6 +18,7 @@ claude.ai login, stored once, for every request.
 - Open a chat, read its messages (current branch), continue it.
 - New chats; claude.ai generates the title.
 - Answers stream in; stop button while streaming.
+- Markdown in answers: code blocks, inline code, headings, bold/italic, lists, quotes, tables, links.
 - Delete a chat (long press), copy a message (long press).
 
 Uses the private API of the claude.ai web client; claude.ai can change it at any time.

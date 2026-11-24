@@ -1,8 +1,10 @@
 import QtQuick 2.2
 import Sailfish.Silica 1.0
+import "../js/markdown.js" as Markdown
 
-// One chat message. User messages are indented and highlighted;
-// long press copies the text.
+// One chat message. User messages are indented, highlighted and plain;
+// Claude's answers are rendered as Markdown. Long press copies the text
+// (the original Markdown).
 ListItem {
     id: item
     property bool fromUser: false
@@ -33,11 +35,19 @@ ListItem {
             x: Theme.paddingMedium
             y: Theme.paddingMedium
             width: parent.width - 2 * Theme.paddingMedium
-            text: item.text
-            textFormat: Text.PlainText
+            textFormat: item.fromUser ? Text.PlainText : Text.RichText
+            text: item.fromUser ? item.text : Markdown.toHtml(item.text, {
+                codeBg: Theme.rgba(Theme.primaryColor, 0.1).toString(),
+                codeColor: Theme.primaryColor.toString(),
+                linkColor: Theme.highlightColor.toString(),
+                quoteColor: Theme.secondaryColor.toString(),
+                ruleColor: Theme.secondaryColor.toString()
+            })
             wrapMode: Text.Wrap
             font.pixelSize: Theme.fontSizeSmall
             color: item.fromUser ? Theme.highlightColor : Theme.primaryColor
+            linkColor: Theme.highlightColor
+            onLinkActivated: Qt.openUrlExternally(link)
         }
     }
 }
