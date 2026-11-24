@@ -1,0 +1,7 @@
+*.o
+moc_*
+Makefile
+.qmake.stash
+harbour-claudechat
+RPMS/
+*.user
