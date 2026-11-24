@@ -1,7 +1,10 @@
 #include <QGuiApplication>
+#include <QQmlContext>
 #include <QQuickView>
 #include <QScopedPointer>
 #include <sailfishapp.h>
+
+#include "claudeclient.h"
 
 int main(int argc, char *argv[])
 {
@@ -9,7 +12,10 @@ int main(int argc, char *argv[])
     app->setOrganizationName(QStringLiteral("org.roterfux"));
     app->setApplicationName(QStringLiteral("harbour-claudechat"));
 
+    ClaudeClient client;
+
     QScopedPointer<QQuickView> view(SailfishApp::createView());
+    view->rootContext()->setContextProperty(QStringLiteral("claude"), &client);
     view->setSource(SailfishApp::pathToMainQml());
     view->show();
 

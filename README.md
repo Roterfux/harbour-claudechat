@@ -1,17 +1,49 @@
 # harbour-claudechat
 
-Sailfish OS wrapper around the claude.ai web chat (Silica WebView). No API,
-no API key: log in on the website inside the app.
-If web login fails (Google login is often blocked in embedded browsers), pull down >
-"Set session cookie" and paste the `sessionKey` cookie value copied from a desktop
-browser (DevTools > Cookies > claude.ai). Cookie expires; paste a new one then.
+Unofficial native Sailfish OS client (Silica/QML + C++) for claude.ai chats.
+No WebView, no web login, no API key: the app uses the `sessionKey` cookie of a
+claude.ai login, stored once, for every request.
 
-- QML only, `Sailfish.WebView` (needs `sailfish-components-webview-qt5` on the phone).
-- Not for Harbour (WebView with a third-party site); distribute via GitHub releases, OpenRepos or Chum.
+## Setup
 
-## Build (sfdk)
+1. Log in to claude.ai in a desktop browser.
+2. Developer tools (F12) > Storage/Application > Cookies > `https://claude.ai`,
+   copy the value of `sessionKey` (starts with `sk-ant-sid`).
+3. First app start: paste it and accept. The app stays logged in until the key
+   expires; then it asks for a new one.
+
+## Features
+
+- Chat list of the account (pull down: new chat, refresh, log out).
+- Open a chat, read its messages (current branch), continue it.
+- New chats; claude.ai generates the title.
+- Answers stream in; stop button while streaming.
+- Delete a chat (long press), copy a message (long press).
+
+Uses the private API of the claude.ai web client; claude.ai can change it at any time.
+
+| Feature | Request |
+| --- | --- |
+| Account | `GET /api/organizations` |
+| Chat list | `GET /api/organizations/{org}/chat_conversations` |
+| Messages | `GET …/chat_conversations/{id}?tree=True&rendering_mode=messages` |
+| New chat | `POST …/chat_conversations` |
+| Send (SSE stream) | `POST …/chat_conversations/{id}/completion` |
+| Title | `POST …/chat_conversations/{id}/title` |
+| Delete | `DELETE …/chat_conversations/{id}` |
+
+Not for Harbour (private web API). Distribute via GitHub releases, OpenRepos or Chum.
+
+## Files on the phone
+
+- `sessionKey`: `~/.config/org.roterfux/harbour-claudechat/settings.conf` (mode 600).
+
+## Build
+
+In WSL on the PC with the Sailfish Platform SDK chroot (see `CLAUDE.md`):
 
 ```bash
-sfdk -c target=SailfishOS-<version>-aarch64 build
-sfdk -c target=SailfishOS-<version>-aarch64 -c device="<device>" deploy --sdk
+wsl -d FedoraLinux-44 -- sh /mnt/c/Users/jgrei/PycharmProjects/PythonProject/harbour-claudechat/tools/build-rpm.sh
 ```
+
+The RPM lands in `RPMS/`.
