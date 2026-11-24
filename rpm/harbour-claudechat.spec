@@ -1,9 +1,9 @@
 Name:       harbour-claudechat
-Version:    0.1.0
+Version:    0.1.3
 Release:    1
 Summary:    Claude chat (claude.ai wrapper)
 License:    BSD
-URL:        https://github.com/Roterfux/arbour-claudechat
+URL:        https://github.com/Roterfux/harbour-claudechat
 Source0:    %{name}-%{version}.tar.bz2
 Requires:   sailfishsilica-qt5 >= 0.10.9
 Requires:   sailfish-components-webview-qt5
