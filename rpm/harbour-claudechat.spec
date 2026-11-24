@@ -1,22 +1,21 @@
 Name:       harbour-claudechat
-Version:    0.1.3
+Version:    0.2.0
 Release:    1
-Summary:    Claude chat (claude.ai wrapper)
+Summary:    Native Claude chat for claude.ai accounts
 License:    BSD
 URL:        https://github.com/Roterfux/harbour-claudechat
 Source0:    %{name}-%{version}.tar.bz2
 Requires:   sailfishsilica-qt5 >= 0.10.9
-Requires:   sailfish-components-webview-qt5
-Requires:   sailfish-components-webview-qt5-popups
-Requires:   sailfish-components-webview-qt5-pickers
 BuildRequires: pkgconfig(sailfishapp) >= 1.0.2
 BuildRequires: pkgconfig(Qt5Core)
 BuildRequires: pkgconfig(Qt5Qml)
 BuildRequires: pkgconfig(Qt5Quick)
+BuildRequires: pkgconfig(Qt5Network)
 BuildRequires: desktop-file-utils
 
 %description
-Unofficial Sailfish OS wrapper around the claude.ai web chat. No API key needed.
+Unofficial native Sailfish OS client for claude.ai chats.
+Uses the session cookie of a claude.ai login, no API key.
 
 %prep
 %autosetup
