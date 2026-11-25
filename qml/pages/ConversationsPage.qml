@@ -7,6 +7,15 @@ Page {
     id: page
     allowedOrientations: Orientation.All
     property bool codeMode: false
+    property string usageSummary: {
+        var parts = []
+        for (var i = 0; i < claude.usage.length; ++i) {
+            var u = claude.usage[i]
+            if (u.key === "five_hour") parts.push(qsTr("5h %1%").arg(Math.round(u.percent)))
+            else if (u.key === "seven_day") parts.push(qsTr("week %1%").arg(Math.round(u.percent)))
+        }
+        return parts.length ? " \u00b7 " + parts.join(" \u00b7 ") : ""
+    }
 
     function openChat(uuid) {
         if (uuid) claude.openConversation(uuid)
@@ -21,6 +30,7 @@ Page {
         if (!claude.loggedIn) claude.connectAccount()
         else if (codeMode) code.refreshSessions()
         else claude.refreshConversations()
+        claude.refreshUsage()
     }
 
     onCodeModeChanged: if (codeMode && code.sessions.length === 0) code.refreshSessions()
@@ -34,7 +44,7 @@ Page {
             width: list.width
             PageHeader {
                 title: page.codeMode ? qsTr("Code") : qsTr("Claude")
-                description: claude.account
+                description: claude.account + page.usageSummary
             }
             // Claude | Code switch
             Row {
@@ -79,6 +89,11 @@ Page {
             MenuItem {
                 text: page.codeMode ? qsTr("Show Claude chats") : qsTr("Show Code sessions")
                 onClicked: page.codeMode = !page.codeMode
+            }
+            MenuItem {
+                text: qsTr("Usage")
+                enabled: claude.loggedIn
+                onClicked: pageStack.push(Qt.resolvedUrl("UsagePage.qml"))
             }
             MenuItem {
                 text: qsTr("Refresh")

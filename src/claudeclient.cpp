@@ -231,6 +231,7 @@ void ClaudeClient::connectAccount()
         m_account = pick.value(QStringLiteral("name")).toString();
         setLoggedIn(true);
         refreshConversations();
+        refreshUsage();
     });
 }
 
@@ -433,6 +434,7 @@ void ClaudeClient::startCompletion(const QString &text)
             emit messagesChanged();
             if (!aborted)
                 emit answerFinished(m_conversationName, m_streamText);
+            refreshUsage();
         }
         m_streamText.clear();
         emit streamTextChanged();
@@ -526,5 +528,84 @@ void ClaudeClient::deleteConversation(const QString &uuid)
         if (uuid == m_conversationId)
             newConversation();
         refreshConversations();
+    });
+}
+
+namespace {
+
+QString usageLabel(const QString &key)
+{
+    if (key == QLatin1String("five_hour"))
+        return ClaudeClient::tr("Current session (5 hours)");
+    if (key == QLatin1String("seven_day"))
+        return ClaudeClient::tr("Weekly, all models");
+    if (key == QLatin1String("seven_day_opus"))
+        return ClaudeClient::tr("Weekly, Opus");
+    if (key == QLatin1String("seven_day_sonnet"))
+        return ClaudeClient::tr("Weekly, Sonnet");
+    if (key == QLatin1String("seven_day_oauth_apps"))
+        return ClaudeClient::tr("Weekly, apps");
+    if (key == QLatin1String("extra_usage"))
+        return ClaudeClient::tr("Extra usage");
+    QString t = key;
+    t.replace(QLatin1Char('_'), QLatin1Char(' '));
+    return t.left(1).toUpper() + t.mid(1);
+}
+
+int usageOrder(const QString &key)
+{
+    static const QStringList order = { QStringLiteral("five_hour"), QStringLiteral("seven_day"),
+                                       QStringLiteral("seven_day_opus"), QStringLiteral("seven_day_sonnet") };
+    const int i = order.indexOf(key);
+    return i < 0 ? order.size() : i;
+}
+
+} // namespace
+
+// Plan usage limits (claude.ai "Usage" settings): every window object that
+// has a "utilization" (percent used) and usually "resets_at".
+void ClaudeClient::refreshUsage()
+{
+    if (m_org.isEmpty())
+        return;
+    QNetworkReply *r = m_nam.get(request(orgPath() + QStringLiteral("/usage")));
+    connect(r, &QNetworkReply::finished, this, [this, r]() {
+        r->deleteLater();
+        const QByteArray body = r->readAll();
+        const int status = r->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        if (r->error() != QNetworkReply::NoError || status < 200 || status >= 300) {
+            m_usageError = status ? QStringLiteral("HTTP %1 (%2)").arg(status).arg(r->url().path())
+                                  : r->errorString();
+            emit usageChanged();
+            return;
+        }
+        const QJsonObject obj = QJsonDocument::fromJson(body).object();
+        QList<QVariantMap> items;
+        for (auto it = obj.constBegin(); it != obj.constEnd(); ++it) {
+            const QJsonObject w = it.value().toObject();
+            if (w.isEmpty() || !w.contains(QStringLiteral("utilization")))
+                continue;
+            if (w.contains(QStringLiteral("is_enabled")) && !w.value(QStringLiteral("is_enabled")).toBool())
+                continue;
+            const QJsonValue u = w.value(QStringLiteral("utilization"));
+            if (u.isNull())
+                continue;
+            QVariantMap m;
+            m[QStringLiteral("key")] = it.key();
+            m[QStringLiteral("label")] = usageLabel(it.key());
+            m[QStringLiteral("percent")] = u.toDouble();
+            m[QStringLiteral("resetsAt")] = w.value(QStringLiteral("resets_at")).toString();
+            items << m;
+        }
+        std::sort(items.begin(), items.end(), [](const QVariantMap &a, const QVariantMap &b) {
+            const int oa = usageOrder(a.value(QStringLiteral("key")).toString());
+            const int ob = usageOrder(b.value(QStringLiteral("key")).toString());
+            return oa != ob ? oa < ob : a.value(QStringLiteral("key")).toString() < b.value(QStringLiteral("key")).toString();
+        });
+        m_usage.clear();
+        for (const QVariantMap &m : items)
+            m_usage << m;
+        m_usageError = m_usage.isEmpty() ? tr("No usage data in the answer") : QString();
+        emit usageChanged();
     });
 }

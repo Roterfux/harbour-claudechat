@@ -25,6 +25,8 @@ class ClaudeClient : public QObject
     Q_PROPERTY(QString conversationName READ conversationName NOTIFY conversationChanged)
     Q_PROPERTY(QVariantList messages READ messages NOTIFY messagesChanged)
     Q_PROPERTY(QString streamText READ streamText NOTIFY streamTextChanged)
+    Q_PROPERTY(QVariantList usage READ usage NOTIFY usageChanged)
+    Q_PROPERTY(QString usageError READ usageError NOTIFY usageChanged)
 
 public:
     explicit ClaudeClient(QObject *parent = nullptr);
@@ -40,6 +42,8 @@ public:
     QString conversationName() const { return m_conversationName; }
     QVariantList messages() const { return m_messages; }
     QString streamText() const { return m_streamText; }
+    QVariantList usage() const { return m_usage; }
+    QString usageError() const { return m_usageError; }
 
     // For CodeClient (same login).
     QString sessionKey() const { return m_sessionKey; }
@@ -54,6 +58,7 @@ public:
     Q_INVOKABLE void send(const QString &text);
     Q_INVOKABLE void stop();
     Q_INVOKABLE void deleteConversation(const QString &uuid);
+    Q_INVOKABLE void refreshUsage();
 
 signals:
     void sessionKeyChanged();
@@ -67,6 +72,7 @@ signals:
     void streamTextChanged();
     void sessionInvalid();
     void answerFinished(const QString &chatName, const QString &text);
+    void usageChanged();
 
 private:
     QNetworkRequest request(const QString &path, bool json = false) const;
@@ -99,6 +105,8 @@ private:
     QByteArray m_streamBuffer;
     QString m_streamText;
     QString m_pendingPrompt;
+    QVariantList m_usage;
+    QString m_usageError;
 };
 
 #endif
