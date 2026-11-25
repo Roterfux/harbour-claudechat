@@ -74,8 +74,6 @@ Page {
         delegate: Loader {
             width: list.width
             property bool hidden: modelData.kind === "tool" && !page.showTools
-            height: hidden ? 0 : (item ? item.height : 0)
-            visible: !hidden
             sourceComponent: hidden ? null : (modelData.kind === "tool" ? toolLine : messageItem)
             property var entry: modelData
         }
