@@ -38,6 +38,13 @@ QString toolSummary(const QVariantMap &block)
     return detail.isEmpty() ? name : name + QStringLiteral(": ") + detail;
 }
 
+bool isTechnical(const QString &text)
+{
+    const QString t = text.trimmed();
+    return t.isEmpty() || t.startsWith(QLatin1Char('<')) || t.startsWith(QLatin1String("Caveat:"))
+           || t.startsWith(QLatin1String("[Request interrupted"));
+}
+
 QVariantMap item(const QString &kind, const QString &text)
 {
     QVariantMap m;
@@ -279,7 +286,7 @@ void CodeClient::addEvents(const QVariantList &events)
             continue;
         const QVariant content = ev.value(QStringLiteral("message")).toMap().value(QStringLiteral("content"));
         if (content.type() == QVariant::String) {
-            if (!content.toString().trimmed().isEmpty()) {
+            if (!isTechnical(content.toString())) {
                 m_messages << item(type, content.toString());
                 changed = true;
             }
@@ -290,7 +297,8 @@ void CodeClient::addEvents(const QVariantList &events)
             const QVariantMap block = b.toMap();
             const QString bt = str(block, "type");
             if (bt == QLatin1String("text")) {
-                texts << str(block, "text");
+                if (!isTechnical(str(block, "text")))
+                    texts << str(block, "text");
             } else if (bt == QLatin1String("tool_use")) {
                 if (!texts.isEmpty()) {
                     m_messages << item(type, texts.join(QStringLiteral("\n\n")));
