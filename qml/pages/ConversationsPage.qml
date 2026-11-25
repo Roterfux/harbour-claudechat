@@ -17,6 +17,16 @@ Page {
         return parts.length ? " \u00b7 " + parts.join(" \u00b7 ") : ""
     }
 
+    // Local date/time of an ISO time: "14:05" today, else "Mon 24.11. 14:05".
+    function when(iso) {
+        if (!iso) return ""
+        var d = new Date(iso)
+        if (isNaN(d.getTime())) return iso.substring(0, 16).replace("T", " ")
+        var now = new Date()
+        if (d.toDateString() === now.toDateString()) return Qt.formatTime(d, "hh:mm")
+        return Qt.formatDateTime(d, d.getFullYear() === now.getFullYear() ? "ddd dd.MM. hh:mm" : "dd.MM.yyyy")
+    }
+
     function openChat(uuid) {
         if (uuid) claude.openConversation(uuid)
         else claude.newConversation()
@@ -109,7 +119,7 @@ Page {
 
         delegate: ListItem {
             id: item
-            contentHeight: page.codeMode ? Theme.itemSizeMedium : Theme.itemSizeSmall
+            contentHeight: Theme.itemSizeMedium
             menu: page.codeMode ? null : deleteMenu
             onClicked: page.codeMode ? page.openSession(modelData.id) : page.openChat(modelData.uuid)
 
@@ -125,9 +135,8 @@ Page {
                     color: item.highlighted ? Theme.highlightColor : Theme.primaryColor
                 }
                 Label {
-                    visible: page.codeMode
                     width: parent.width
-                    text: page.codeMode ? modelData.status + "  " + modelData.updatedAt.substring(0, 16).replace("T", " ") : ""
+                    text: (page.codeMode ? modelData.status + "  " : "") + page.when(modelData.updatedAt)
                     font.pixelSize: Theme.fontSizeExtraSmall
                     color: Theme.secondaryColor
                     truncationMode: TruncationMode.Fade
