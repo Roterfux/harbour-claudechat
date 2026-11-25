@@ -49,6 +49,45 @@ QString messageText(const QJsonObject &m)
     return parts.join(QStringLiteral("\n\n"));
 }
 
+QString cacheDir()
+{
+    return QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + QStringLiteral("/chats");
+}
+
+QString cacheFile(const QString &name)
+{
+    QString safe = name;
+    safe.replace(QLatin1Char('/'), QLatin1Char('_'));
+    return cacheDir() + QLatin1Char('/') + safe + QStringLiteral(".json");
+}
+
+QVariant readCache(const QString &name)
+{
+    QFile f(cacheFile(name));
+    if (!f.open(QIODevice::ReadOnly))
+        return QVariant();
+    return QJsonDocument::fromJson(f.readAll()).toVariant();
+}
+
+void writeCache(const QString &name, const QVariant &data)
+{
+    QDir().mkpath(cacheDir());
+    QFile f(cacheFile(name));
+    if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        f.write(QJsonDocument::fromVariant(data).toJson(QJsonDocument::Compact));
+        f.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner);
+    }
+}
+
+// Newest first (ISO 8601 times compare as text).
+void sortByUpdated(QVariantList &list)
+{
+    std::sort(list.begin(), list.end(), [](const QVariant &a, const QVariant &b) {
+        return a.toMap().value(QStringLiteral("updatedAt")).toString()
+               > b.toMap().value(QStringLiteral("updatedAt")).toString();
+    });
+}
+
 } // namespace
 
 ClaudeClient::ClaudeClient(QObject *parent)
@@ -102,6 +141,7 @@ void ClaudeClient::logout()
         QSettings s(settingsPath(), QSettings::IniFormat);
         s.remove(QStringLiteral("sessionKey"));
     }
+    QDir(cacheDir()).removeRecursively();
     m_conversations.clear();
     m_messages.clear();
     m_conversationId.clear();
@@ -239,12 +279,20 @@ void ClaudeClient::refreshConversations()
 {
     if (m_org.isEmpty())
         return;
+    // Show the list from the last run right away.
+    if (m_conversations.isEmpty()) {
+        const QVariantList cached = readCache(QStringLiteral("list-") + m_org).toList();
+        if (!cached.isEmpty()) {
+            m_conversations = cached;
+            emit conversationsChanged();
+        }
+    }
     QNetworkReply *r = get(orgPath() + QStringLiteral("/chat_conversations?limit=100"));
     connect(r, &QNetworkReply::finished, this, [this, r]() {
         QByteArray data;
         if (!checkReply(r, &data))
             return;
-        m_conversations.clear();
+        QVariantList fresh;
         const QJsonArray list = QJsonDocument::fromJson(data).array();
         for (const QJsonValue &v : list) {
             const QJsonObject c = v.toObject();
@@ -252,8 +300,13 @@ void ClaudeClient::refreshConversations()
             m[QStringLiteral("uuid")] = c.value(QStringLiteral("uuid")).toString();
             m[QStringLiteral("name")] = c.value(QStringLiteral("name")).toString();
             m[QStringLiteral("updatedAt")] = c.value(QStringLiteral("updated_at")).toString();
-            m_conversations << m;
+            fresh << m;
         }
+        sortByUpdated(fresh);
+        if (fresh == m_conversations)
+            return;
+        m_conversations = fresh;
+        writeCache(QStringLiteral("list-") + m_org, m_conversations);
         emit conversationsChanged();
     });
 }
@@ -270,6 +323,15 @@ void ClaudeClient::openConversation(const QString &uuid)
     }
     m_leafId.clear();
     m_messages.clear();
+    // Show the messages from the last visit right away; loadConversation()
+    // replaces them only if something changed.
+    const QVariantMap cached = readCache(QStringLiteral("chat-") + uuid).toMap();
+    if (!cached.isEmpty()) {
+        m_messages = cached.value(QStringLiteral("messages")).toList();
+        m_leafId = cached.value(QStringLiteral("leaf")).toString();
+        if (m_conversationName.isEmpty())
+            m_conversationName = cached.value(QStringLiteral("name")).toString();
+    }
     emit conversationChanged();
     emit messagesChanged();
     loadConversation();
@@ -293,7 +355,7 @@ void ClaudeClient::loadConversation()
         return;
     const QString id = m_conversationId;
     QNetworkReply *r = get(orgPath() + QStringLiteral("/chat_conversations/") + id
-                           + QStringLiteral("?tree=True&rendering_mode=messages&render_all_tools=true"));
+                           + QStringLiteral("?tree=False&rendering_mode=messages"));
     connect(r, &QNetworkReply::finished, this, [this, r, id]() {
         QByteArray data;
         if (!checkReply(r, &data) || id != m_conversationId)
@@ -328,16 +390,24 @@ void ClaudeClient::loadConversation()
                 m_leafId = branch.last().value(QStringLiteral("uuid")).toString();
         }
 
-        m_messages.clear();
+        QVariantList fresh;
         for (const QJsonObject &m : branch) {
             QVariantMap item;
             item[QStringLiteral("uuid")] = m.value(QStringLiteral("uuid")).toString();
             item[QStringLiteral("fromUser")] = m.value(QStringLiteral("sender")).toString() == QLatin1String("human");
             item[QStringLiteral("text")] = messageText(m);
-            m_messages << item;
+            fresh << item;
         }
+        QVariantMap cache;
+        cache[QStringLiteral("name")] = m_conversationName;
+        cache[QStringLiteral("leaf")] = m_leafId;
+        cache[QStringLiteral("messages")] = fresh;
+        writeCache(QStringLiteral("chat-") + id, cache);
         emit conversationChanged();
-        emit messagesChanged();
+        if (fresh != m_messages) {
+            m_messages = fresh;
+            emit messagesChanged();
+        }
     });
 }
 

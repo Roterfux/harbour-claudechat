@@ -1,6 +1,8 @@
 #include "codeclient.h"
 #include "claudeclient.h"
 
+#include <algorithm>
+
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -161,6 +163,10 @@ void CodeClient::fetchSessions(bool quiet)
                 emit sessionFinished(id, str(s, "title"), status);
             m_lastStatus.insert(id, status);
         }
+        std::sort(m_sessions.begin(), m_sessions.end(), [](const QVariant &a, const QVariant &b) {
+            return a.toMap().value(QStringLiteral("updatedAt")).toString()
+                   > b.toMap().value(QStringLiteral("updatedAt")).toString();
+        });
         emit sessionsChanged();
     });
 }
