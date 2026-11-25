@@ -61,6 +61,24 @@ cat > "$W/stub/Sailfish/WebView/Popups/PopupProvider.qml" <<'EOF'
 import QtQuick 2.0
 QtObject {}
 EOF
+mkdir -p "$W/stub/Nemo/Notifications"
+cat > "$W/stub/Nemo/Notifications/qmldir" <<'EOF'
+module Nemo.Notifications
+Notification 1.0 Notification.qml
+EOF
+cat > "$W/stub/Nemo/Notifications/Notification.qml" <<'EOF'
+import QtQuick 2.0
+QtObject {
+    property string appName
+    property string appIcon
+    property string summary
+    property string body
+    property string previewSummary
+    property string previewBody
+    property int expireTimeout
+    function publish() {}
+}
+EOF
 cat > "$W/stub/Sailfish/WebView/WebViewPage.qml" <<'EOF'
 import QtQuick 2.0
 import Sailfish.Silica 1.0
