@@ -8,7 +8,8 @@ Always answer in caveman style (use the caveman skill).
 - Bug fix or small tweak: patch bump (0.1.0 -> 0.1.1).
 - New feature or bigger change: minor bump, patch reset (0.1.3 -> 0.2.0).
 - `Release:` stays `1`.
-- Releases get a git tag `vX.Y.Z` matching the spec version.
+- Releases: CI creates release `vX.Y.Z` (tag + RPMs) on the first push to main with a new spec version,
+  and deletes merged `claude/*` branches. No manual tagging needed.
 
 ## Build
 

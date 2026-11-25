@@ -47,23 +47,45 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: rpms
           merge-multiple: true
-      - name: Publish release (tag v*) or pre-release
+      # main: the spec version gets a real release (tag vX.Y.Z created here)
+      # the first time it is built; tags v* likewise. Everything else, and
+      # main builds of a version that is already released: test pre-release.
+      - name: Publish release or pre-release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          VER=$(sed -n 's/^Version:[[:space:]]*//p' rpm/harbour-claudechat.spec | head -1)
+          NOTES="Native claude.ai client for Sailfish OS ${SFOS_RELEASE}. Paste the claude.ai sessionKey cookie once on first start. Install: devel-su pkcon install-local harbour-claudechat-${VER}-1.aarch64.rpm"
           if [ "$GITHUB_REF_TYPE" = tag ] && [ "${GITHUB_REF_NAME#v}" != "$GITHUB_REF_NAME" ]; then
-            gh release create "$GITHUB_REF_NAME" rpms/*.rpm \
-              --repo "$GITHUB_REPOSITORY" --verify-tag \
-              --title "harbour-claudechat ${GITHUB_REF_NAME#v}" \
-              --notes "Native claude.ai client for Sailfish OS ${SFOS_RELEASE}. Paste the claude.ai sessionKey cookie once on first start. Install: devel-su pkcon install-local harbour-claudechat-${GITHUB_REF_NAME#v}-1.aarch64.rpm"
+            gh release create "$GITHUB_REF_NAME" rpms/*.rpm --repo "$GITHUB_REPOSITORY" --verify-tag \
+              --title "harbour-claudechat ${GITHUB_REF_NAME#v}" --notes "$NOTES"
+          elif [ "$GITHUB_REF" = refs/heads/main ] && ! gh release view "v$VER" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "v$VER" rpms/*.rpm --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+              --title "harbour-claudechat $VER" --notes "$NOTES"
           else
             TAG="build-${GITHUB_SHA::7}"
-            gh release create "$TAG" rpms/*.rpm \
-              --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            gh release create "$TAG" rpms/*.rpm --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
               --prerelease --title "Test build ${GITHUB_SHA::7} (SFOS ${SFOS_RELEASE})" \
-              --notes "Automatic test build from ${GITHUB_REF_NAME}. Native claude.ai client; paste the sessionKey cookie on first start."
+              --notes "Automatic test build from ${GITHUB_REF_NAME}, version ${VER}."
           fi
+
+  # After a push to main: delete claude/* branches that are fully merged.
+  cleanup:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Delete merged claude/* branches
+        run: |
+          git fetch origin '+refs/heads/*:refs/remotes/origin/*'
+          for b in $(git branch -r --merged origin/main | sed 's#^ *origin/##' | grep '^claude/' || true); do
+            echo "delete $b"
+            git push origin --delete "$b" || true
+          done

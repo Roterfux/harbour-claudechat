@@ -6,6 +6,7 @@ import Sailfish.Silica 1.0
 Page {
     id: page
     allowedOrientations: Orientation.All
+    property bool showTools: false
 
     Component.onDestruction: code.closeSession()
 
@@ -56,6 +57,10 @@ Page {
         PullDownMenu {
             busy: code.busy
             MenuItem {
+                text: page.showTools ? qsTr("Hide tool calls") : qsTr("Show tool calls")
+                onClicked: page.showTools = !page.showTools
+            }
+            MenuItem {
                 text: qsTr("Open in browser")
                 onClicked: Qt.openUrlExternally("https://claude.ai/code/" + code.sessionId)
             }
@@ -65,9 +70,13 @@ Page {
             }
         }
 
+        // Tool calls ("Bash: ...") are hidden unless switched on.
         delegate: Loader {
             width: list.width
-            sourceComponent: modelData.kind === "tool" ? toolLine : messageItem
+            property bool hidden: modelData.kind === "tool" && !page.showTools
+            height: hidden ? 0 : (item ? item.height : 0)
+            visible: !hidden
+            sourceComponent: hidden ? null : (modelData.kind === "tool" ? toolLine : messageItem)
             property var entry: modelData
         }
 
