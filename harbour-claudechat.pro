@@ -1,16 +1,14 @@
 TARGET = harbour-claudechat
 
 CONFIG += sailfishapp
-QT += network dbus
+QT += network
 
 SOURCES += src/main.cpp \
     src/claudeclient.cpp \
-    src/codeclient.cpp \
-    src/speechclient.cpp
+    src/codeclient.cpp
 
 HEADERS += src/claudeclient.h \
-    src/codeclient.h \
-    src/speechclient.h
+    src/codeclient.h
 
 DISTFILES += \
     harbour-claudechat.desktop \
