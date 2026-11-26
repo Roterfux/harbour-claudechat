@@ -194,13 +194,23 @@ void CodeClient::openSession(const QString &id)
     m_messages.clear();
     emit sessionChanged();
     emit messagesChanged();
+    setLoadingSession(true);
     loadSession(false);
     m_poll.start();
+}
+
+void CodeClient::setLoadingSession(bool on)
+{
+    if (m_loadingSession == on)
+        return;
+    m_loadingSession = on;
+    emit loadingSessionChanged();
 }
 
 void CodeClient::closeSession()
 {
     m_poll.stop();
+    setLoadingSession(false);
     m_sessionId.clear();
     emit sessionChanged();
 }
@@ -216,8 +226,11 @@ void CodeClient::loadSession(bool quiet)
     QNetworkReply *r = m_nam.get(request(QStringLiteral("/v1/sessions/") + id));
     connect(r, &QNetworkReply::finished, this, [this, r, id, quiet]() {
         QByteArray data;
-        if (!checkReply(r, &data, !quiet) || id != m_sessionId)
+        if (!checkReply(r, &data, !quiet) || id != m_sessionId) {
+            if (id == m_sessionId)
+                setLoadingSession(false);
             return;
+        }
         const QJsonObject s = QJsonDocument::fromJson(data).object();
         const QString title = s.value(QStringLiteral("title")).toString();
         const QString status = s.value(QStringLiteral("session_status")).toString();
@@ -249,13 +262,20 @@ void CodeClient::loadEvents(const QString &afterId, bool quiet)
                                          + q.toString(QUrl::FullyEncoded)));
     connect(r, &QNetworkReply::finished, this, [this, r, id, quiet]() {
         QByteArray data;
-        if (!checkReply(r, &data, !quiet) || id != m_sessionId)
+        if (!checkReply(r, &data, !quiet) || id != m_sessionId) {
+            if (id == m_sessionId)
+                setLoadingSession(false);
             return;
+        }
         const QJsonObject page = QJsonDocument::fromJson(data).object();
         addEvents(page.value(QStringLiteral("data")).toArray().toVariantList());
+        if (m_loadingSession)
+            emit loadingSessionChanged();   // loadedEvents grew
         const QString last = page.value(QStringLiteral("last_id")).toString();
         if (page.value(QStringLiteral("has_more")).toBool() && !last.isEmpty())
             loadEvents(last, quiet);
+        else
+            setLoadingSession(false);
     });
 }
 
