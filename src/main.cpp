@@ -6,7 +6,6 @@
 
 #include "claudeclient.h"
 #include "codeclient.h"
-#include "speechclient.h"
 
 int main(int argc, char *argv[])
 {
@@ -16,12 +15,10 @@ int main(int argc, char *argv[])
 
     ClaudeClient client;
     CodeClient code(&client);
-    SpeechClient speech;
 
     QScopedPointer<QQuickView> view(SailfishApp::createView());
     view->rootContext()->setContextProperty(QStringLiteral("claude"), &client);
     view->rootContext()->setContextProperty(QStringLiteral("code"), &code);
-    view->rootContext()->setContextProperty(QStringLiteral("speech"), &speech);
     view->setSource(SailfishApp::pathToMainQml());
     view->show();
 
