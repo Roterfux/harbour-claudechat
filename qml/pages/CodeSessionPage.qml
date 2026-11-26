@@ -1,5 +1,6 @@
 import QtQuick 2.2
 import Sailfish.Silica 1.0
+import "../js/listsync.js" as ListSync
 
 // One Claude Code session: messages and tool calls, refreshed every few
 // seconds while open; send a message into the session.
@@ -7,6 +8,18 @@ Page {
     id: page
     allowedOrientations: Orientation.All
     property bool showTools: false
+
+    function syncMessages() { ListSync.sync(messageModel, code.messages) }
+    Connections {
+        target: code
+        onMessagesChanged: page.syncMessages()
+    }
+
+    LoadingBar {
+        anchors.top: parent.top
+        running: code.busy
+        z: 10
+    }
 
     Component.onDestruction: code.closeSession()
 
@@ -39,13 +52,13 @@ Page {
         onSessionChanged: page.scrollDown()
         onMessagesChanged: page.scrollDown()
     }
-    Component.onCompleted: scrollDown()
+    Component.onCompleted: { syncMessages(); scrollDown() }
 
     SilicaListView {
         id: list
         anchors { top: parent.top; left: parent.left; right: parent.right; bottom: input.top }
         clip: true
-        model: code.messages
+        model: ListModel { id: messageModel }
         onContentHeightChanged: if (page.settling) scrollTimer.restart()
         onCountChanged: page.scrollDown()
 
@@ -73,9 +86,9 @@ Page {
         // Tool calls ("Bash: ...") are hidden unless switched on.
         delegate: Loader {
             width: list.width
-            property bool hidden: modelData.kind === "tool" && !page.showTools
-            sourceComponent: hidden ? null : (modelData.kind === "tool" ? toolLine : messageItem)
-            property var entry: modelData
+            property bool hidden: model.kind === "tool" && !page.showTools
+            sourceComponent: hidden ? null : (model.kind === "tool" ? toolLine : messageItem)
+            property var entry: model
         }
 
         footer: Column {
