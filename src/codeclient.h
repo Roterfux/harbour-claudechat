@@ -24,6 +24,9 @@ class CodeClient : public QObject
     Q_PROPERTY(QString sessionTitle READ sessionTitle NOTIFY sessionChanged)
     Q_PROPERTY(QString sessionStatus READ sessionStatus NOTIFY sessionChanged)
     Q_PROPERTY(QVariantList messages READ messages NOTIFY messagesChanged)
+    // First load of an opened session: true until all events are there.
+    Q_PROPERTY(bool loadingSession READ loadingSession NOTIFY loadingSessionChanged)
+    Q_PROPERTY(int loadedEvents READ loadedEvents NOTIFY loadingSessionChanged)
 
 public:
     explicit CodeClient(ClaudeClient *claude, QObject *parent = nullptr);
@@ -35,6 +38,8 @@ public:
     QString sessionTitle() const { return m_sessionTitle; }
     QString sessionStatus() const { return m_sessionStatus; }
     QVariantList messages() const { return m_messages; }
+    bool loadingSession() const { return m_loadingSession; }
+    int loadedEvents() const { return m_events.size(); }
 
     Q_INVOKABLE void refreshSessions();
     Q_INVOKABLE void openSession(const QString &id);
@@ -47,6 +52,7 @@ signals:
     void sessionsChanged();
     void sessionChanged();
     void messagesChanged();
+    void loadingSessionChanged();
     // A session that was running stopped (finished, waiting for input, failed).
     void sessionFinished(const QString &sessionUuid, const QString &title, const QString &status);
 
@@ -74,6 +80,8 @@ private:
     QVariantList m_events;      // raw events of the open session
     QStringList m_eventIds;
     QVariantList m_messages;    // display items built from m_events
+    bool m_loadingSession = false;
+    void setLoadingSession(bool on);
 };
 
 #endif

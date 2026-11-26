@@ -9,15 +9,39 @@ Page {
     allowedOrientations: Orientation.All
     property bool showTools: false
 
-    function syncMessages() { ListSync.sync(messageModel, code.messages) }
+    property bool loading: code.loadingSession
+    function syncMessages() { if (!page.loading) ListSync.sync(messageModel, code.messages) }
+
+    // Show the messages only when fully loaded: hidden while loading, then
+    // laid out at the end and faded in once (no visible swapping).
+    property bool revealed: !page.loading
+    onLoadingChanged: {
+        if (loading) {
+            revealed = false
+        } else {
+            syncMessages()
+            revealTimer.restart()
+        }
+    }
+    Timer {
+        id: revealTimer
+        interval: 350      // let rich text lay out first
+        onTriggered: { list.positionViewAtEnd(); page.revealed = true; page.scrollDown() }
+    }
     Connections {
         target: code
         onMessagesChanged: page.syncMessages()
     }
 
+    LoadingOverlay {
+        active: !page.revealed
+        text: code.loadedEvents > 0 ? qsTr("Loading session... %1 events").arg(code.loadedEvents)
+                                    : qsTr("Loading session...")
+        z: 5
+    }
     LoadingBar {
         anchors.top: parent.top
-        running: code.busy
+        running: code.busy && page.revealed
         z: 10
     }
 
@@ -59,6 +83,8 @@ Page {
         anchors { top: parent.top; left: parent.left; right: parent.right; bottom: input.top }
         clip: true
         model: ListModel { id: messageModel }
+        opacity: page.revealed ? 1 : 0
+        Behavior on opacity { FadeAnimation {} }
         onContentHeightChanged: if (page.settling) scrollTimer.restart()
         onCountChanged: page.scrollDown()
 
