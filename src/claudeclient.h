@@ -5,6 +5,7 @@
 #include <QVariantList>
 #include <QNetworkAccessManager>
 #include <QPointer>
+#include <QHash>
 
 class QNetworkReply;
 
@@ -27,6 +28,7 @@ class ClaudeClient : public QObject
     Q_PROPERTY(QString streamText READ streamText NOTIFY streamTextChanged)
     Q_PROPERTY(QVariantList usage READ usage NOTIFY usageChanged)
     Q_PROPERTY(QString usageError READ usageError NOTIFY usageChanged)
+    Q_PROPERTY(int seenVersion READ seenVersion NOTIFY seenChanged)
 
 public:
     explicit ClaudeClient(QObject *parent = nullptr);
@@ -44,6 +46,7 @@ public:
     QString streamText() const { return m_streamText; }
     QVariantList usage() const { return m_usage; }
     QString usageError() const { return m_usageError; }
+    int seenVersion() const { return m_seenVersion; }
 
     // For CodeClient (same login).
     QString sessionKey() const { return m_sessionKey; }
@@ -59,6 +62,10 @@ public:
     Q_INVOKABLE void stop();
     Q_INVOKABLE void deleteConversation(const QString &uuid);
     Q_INVOKABLE void refreshUsage();
+    // "Done/new" markers: last seen change time per chat or Code session.
+    Q_INVOKABLE void rememberItems(const QVariantList &items, const QString &idKey);
+    Q_INVOKABLE bool isNew(const QString &id, const QString &updatedAt) const;
+    Q_INVOKABLE void markSeen(const QString &id, const QString &updatedAt);
 
 signals:
     void sessionKeyChanged();
@@ -73,6 +80,7 @@ signals:
     void sessionInvalid();
     void answerFinished(const QString &chatName, const QString &text);
     void usageChanged();
+    void seenChanged();
 
 private:
     QNetworkRequest request(const QString &path, bool json = false) const;
@@ -107,6 +115,9 @@ private:
     QString m_pendingPrompt;
     QVariantList m_usage;
     QString m_usageError;
+    QHash<QString, QString> m_seen;   // id -> updatedAt when last seen ("" = never)
+    int m_seenVersion = 0;
+    void saveSeen();
 };
 
 #endif

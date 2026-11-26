@@ -9,5 +9,6 @@ X-Nemo-Single-Instance=yes
 
 [X-Sailjail]
 Permissions=Internet
+Sandboxing=Disabled
 OrganizationName=org.roterfux
 ApplicationName=harbour-claudechat

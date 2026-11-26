@@ -8,7 +8,11 @@ Page {
     allowedOrientations: Orientation.All
     property bool showTools: false
 
-    Component.onDestruction: code.closeSession()
+    Component.onDestruction: { code.closeSession(); speech.stop() }
+    Connections {
+        target: speech
+        onTextRecognized: field.text = field.text.trim() === "" ? text : field.text.trim() + " " + text
+    }
 
     // Always jump to the end (newest message) on every update: open, new
     // messages, streaming, poll, reload, back to this page, app to front.
@@ -51,7 +55,7 @@ Page {
 
         header: PageHeader {
             title: code.sessionTitle !== "" ? code.sessionTitle : qsTr("Code session")
-            description: code.sessionStatus
+            description: code.sessionStatus === "running" ? qsTr("working...") : code.sessionStatus
         }
 
         PullDownMenu {
@@ -80,6 +84,9 @@ Page {
 
         footer: Column {
             width: list.width
+            WorkingIndicator {
+                running: code.sessionStatus === "running"
+            }
             Label {
                 visible: code.error !== ""
                 x: Theme.horizontalPageMargin
@@ -134,10 +141,13 @@ Page {
 
         TextArea {
             id: field
-            anchors { left: parent.left; right: sendButton.left; bottom: parent.bottom }
-            placeholderText: qsTr("Message the session")
+            anchors { left: parent.left; right: sendButton.left; rightMargin: Theme.itemSizeSmall; bottom: parent.bottom }
+            placeholderText: speech.listening ? (speech.partialText !== "" ? speech.partialText : qsTr("Listening...")) : qsTr("Message the session")
             label: ""
             labelVisible: false
+        }
+        MicButton {
+            anchors { right: sendButton.left; bottom: parent.bottom; bottomMargin: Theme.paddingMedium }
         }
         IconButton {
             id: sendButton
