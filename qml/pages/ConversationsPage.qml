@@ -27,12 +27,19 @@ Page {
         return Qt.formatDateTime(d, d.getFullYear() === now.getFullYear() ? "ddd dd.MM. hh:mm" : "dd.MM.yyyy")
     }
 
+    function updatedOf(list, idKey, id) {
+        for (var i = 0; i < list.length; ++i)
+            if (list[i][idKey] === id) return list[i].updatedAt
+        return ""
+    }
     function openChat(uuid) {
+        if (uuid) claude.markSeen(uuid, updatedOf(claude.conversations, "uuid", uuid))
         if (uuid) claude.openConversation(uuid)
         else claude.newConversation()
         pageStack.push(Qt.resolvedUrl("ChatPage.qml"))
     }
     function openSession(id) {
+        claude.markSeen(id, updatedOf(code.sessions, "id", id))
         code.openSession(id)
         pageStack.push(Qt.resolvedUrl("CodeSessionPage.qml"))
     }
@@ -44,6 +51,25 @@ Page {
     }
 
     onCodeModeChanged: if (codeMode && code.sessions.length === 0) code.refreshSessions()
+
+    // Markers: remember new items; the chat/session open on screen counts as seen.
+    function seenOpen(list, idKey, openId) {
+        claude.rememberItems(list, idKey)
+        for (var i = 0; i < list.length; ++i)
+            if (list[i][idKey] === openId) claude.markSeen(openId, list[i].updatedAt)
+    }
+    Connections {
+        target: claude
+        onConversationsChanged: page.seenOpen(claude.conversations, "uuid", claude.conversationId)
+    }
+    Connections {
+        target: code
+        onSessionsChanged: page.seenOpen(code.sessions, "id", code.sessionId)
+    }
+    Component.onCompleted: {
+        seenOpen(claude.conversations, "uuid", "")
+        seenOpen(code.sessions, "id", "")
+    }
 
     SilicaListView {
         id: list
@@ -123,6 +149,20 @@ Page {
             menu: page.codeMode ? null : deleteMenu
             onClicked: page.codeMode ? page.openSession(modelData.id) : page.openChat(modelData.uuid)
 
+            Rectangle {
+                id: doneDot
+                property bool show: {
+                    claude.seenVersion   // re-evaluate when markers change
+                    var id = page.codeMode ? modelData.id : modelData.uuid
+                    return claude.isNew(id, modelData.updatedAt) && !(page.codeMode && modelData.status === "running")
+                }
+                visible: show
+                width: Theme.paddingMedium * 1.5
+                height: width
+                radius: width / 2
+                color: Theme.highlightColor
+                anchors { left: parent.left; leftMargin: Theme.paddingSmall; verticalCenter: parent.verticalCenter }
+            }
             BusyIndicator {
                 id: rowBusy
                 anchors { right: parent.right; rightMargin: Theme.horizontalPageMargin; verticalCenter: parent.verticalCenter }
@@ -136,6 +176,7 @@ Page {
                 anchors.verticalCenter: parent.verticalCenter
                 Label {
                     width: parent.width
+                    font.bold: doneDot.visible
                     text: page.codeMode ? (modelData.title !== "" ? modelData.title : qsTr("Untitled session"))
                                         : (modelData.name !== "" ? modelData.name : qsTr("Untitled chat"))
                     truncationMode: TruncationMode.Fade
@@ -143,7 +184,8 @@ Page {
                 }
                 Label {
                     width: parent.width
-                    text: (page.codeMode ? modelData.status + "  " : "") + page.when(modelData.updatedAt)
+                    text: (doneDot.visible ? (page.codeMode ? qsTr("done") : qsTr("new")) + "  " : "")
+                          + (page.codeMode ? modelData.status + "  " : "") + page.when(modelData.updatedAt)
                     font.pixelSize: Theme.fontSizeExtraSmall
                     color: Theme.secondaryColor
                     truncationMode: TruncationMode.Fade
