@@ -94,10 +94,11 @@ QNetworkRequest CodeClient::request(const QString &path, bool json) const
     return req;
 }
 
-bool CodeClient::checkReply(QNetworkReply *reply, QByteArray *data)
+bool CodeClient::checkReply(QNetworkReply *reply, QByteArray *data, bool counted)
 {
     reply->deleteLater();
-    setBusy(false);
+    if (counted)
+        setBusy(false);
     const QByteArray body = reply->readAll();
     if (data)
         *data = body;
@@ -145,10 +146,8 @@ void CodeClient::fetchSessions(bool quiet)
         setBusy(true);
     QNetworkReply *r = m_nam.get(request(QStringLiteral("/v1/sessions?limit=50")));
     connect(r, &QNetworkReply::finished, this, [this, r, quiet]() {
-        if (quiet)
-            setBusy(true);   // balanced by checkReply
         QByteArray data;
-        if (!checkReply(r, &data))
+        if (!checkReply(r, &data, !quiet))
             return;
         const QJsonDocument doc = QJsonDocument::fromJson(data);
         const QVariantList list = doc.isArray() ? doc.array().toVariantList()
@@ -216,10 +215,8 @@ void CodeClient::loadSession(bool quiet)
         setBusy(true);
     QNetworkReply *r = m_nam.get(request(QStringLiteral("/v1/sessions/") + id));
     connect(r, &QNetworkReply::finished, this, [this, r, id, quiet]() {
-        if (quiet)
-            setBusy(true);   // balanced by checkReply
         QByteArray data;
-        if (!checkReply(r, &data) || id != m_sessionId)
+        if (!checkReply(r, &data, !quiet) || id != m_sessionId)
             return;
         const QJsonObject s = QJsonDocument::fromJson(data).object();
         const QString title = s.value(QStringLiteral("title")).toString();
@@ -251,10 +248,8 @@ void CodeClient::loadEvents(const QString &afterId, bool quiet)
     QNetworkReply *r = m_nam.get(request(QStringLiteral("/v1/sessions/") + id + QStringLiteral("/events?")
                                          + q.toString(QUrl::FullyEncoded)));
     connect(r, &QNetworkReply::finished, this, [this, r, id, quiet]() {
-        if (quiet)
-            setBusy(true);
         QByteArray data;
-        if (!checkReply(r, &data) || id != m_sessionId)
+        if (!checkReply(r, &data, !quiet) || id != m_sessionId)
             return;
         const QJsonObject page = QJsonDocument::fromJson(data).object();
         addEvents(page.value(QStringLiteral("data")).toArray().toVariantList());
