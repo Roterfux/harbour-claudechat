@@ -123,9 +123,16 @@ Page {
             menu: page.codeMode ? null : deleteMenu
             onClicked: page.codeMode ? page.openSession(modelData.id) : page.openChat(modelData.uuid)
 
+            BusyIndicator {
+                id: rowBusy
+                anchors { right: parent.right; rightMargin: Theme.horizontalPageMargin; verticalCenter: parent.verticalCenter }
+                size: BusyIndicatorSize.ExtraSmall
+                running: page.codeMode && modelData.status === "running"
+                visible: running
+            }
             Column {
                 x: Theme.horizontalPageMargin
-                width: parent.width - 2 * Theme.horizontalPageMargin
+                width: parent.width - 2 * Theme.horizontalPageMargin - (rowBusy.visible ? rowBusy.width + Theme.paddingMedium : 0)
                 anchors.verticalCenter: parent.verticalCenter
                 Label {
                     width: parent.width

@@ -55,7 +55,7 @@ Page {
 
         header: PageHeader {
             title: code.sessionTitle !== "" ? code.sessionTitle : qsTr("Code session")
-            description: code.sessionStatus
+            description: code.sessionStatus === "running" ? qsTr("working...") : code.sessionStatus
         }
 
         PullDownMenu {
@@ -84,6 +84,9 @@ Page {
 
         footer: Column {
             width: list.width
+            WorkingIndicator {
+                running: code.sessionStatus === "running"
+            }
             Label {
                 visible: code.error !== ""
                 x: Theme.horizontalPageMargin

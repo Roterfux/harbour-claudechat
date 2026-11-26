@@ -101,9 +101,13 @@ Page {
         footer: Column {
             width: list.width
             MessageItem {
-                visible: claude.sending
+                visible: claude.sending && claude.streamText !== ""
                 fromUser: false
-                text: claude.streamText !== "" ? claude.streamText : "…"
+                text: claude.streamText
+            }
+            WorkingIndicator {
+                running: claude.sending
+                text: claude.streamText === "" ? qsTr("Claude is thinking...") : qsTr("Claude is writing...")
             }
             Label {
                 visible: claude.error !== ""
