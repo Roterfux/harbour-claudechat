@@ -379,21 +379,34 @@ void ClaudeClient::openConversation(const QString &uuid)
     m_messages.clear();
     // Show the messages from the last visit right away; loadConversation()
     // replaces them only if something changed.
+    // Messages are shown once the chat is fully loaded (no swapping of
+    // cached and fresh text). The cache is used only if loading fails.
     const QVariantMap cached = readCache(QStringLiteral("chat-") + uuid).toMap();
+    m_cachedMessages = cached.value(QStringLiteral("messages")).toList();
     if (!cached.isEmpty()) {
-        m_messages = cached.value(QStringLiteral("messages")).toList();
         m_leafId = cached.value(QStringLiteral("leaf")).toString();
         if (m_conversationName.isEmpty())
             m_conversationName = cached.value(QStringLiteral("name")).toString();
     }
     emit conversationChanged();
     emit messagesChanged();
+    setLoadingChat(true);
     loadConversation();
+}
+
+void ClaudeClient::setLoadingChat(bool on)
+{
+    if (m_loadingChat == on)
+        return;
+    m_loadingChat = on;
+    m_loadProgress = -1;
+    emit loadingChatChanged();
 }
 
 void ClaudeClient::newConversation()
 {
     stop();
+    setLoadingChat(false);
     m_conversationId.clear();
     m_conversationName.clear();
     m_leafId.clear();
@@ -410,10 +423,28 @@ void ClaudeClient::loadConversation()
     const QString id = m_conversationId;
     QNetworkReply *r = get(orgPath() + QStringLiteral("/chat_conversations/") + id
                            + QStringLiteral("?tree=False&rendering_mode=messages"));
+    if (m_loadingChat) {
+        connect(r, &QNetworkReply::downloadProgress, this, [this, id](qint64 got, qint64 total) {
+            if (id != m_conversationId || !m_loadingChat)
+                return;
+            m_loadProgress = total > 0 ? qreal(got) / qreal(total) : -1;
+            emit loadingChatChanged();
+        });
+    }
     connect(r, &QNetworkReply::finished, this, [this, r, id]() {
         QByteArray data;
-        if (!checkReply(r, &data) || id != m_conversationId)
+        if (id != m_conversationId) {
+            r->deleteLater();
             return;
+        }
+        if (!checkReply(r, &data)) {
+            if (m_loadingChat && m_messages.isEmpty() && !m_cachedMessages.isEmpty()) {
+                m_messages = m_cachedMessages;   // offline: last known state
+                emit messagesChanged();
+            }
+            setLoadingChat(false);
+            return;
+        }
         const QJsonObject conv = QJsonDocument::fromJson(data).object();
         m_conversationName = conv.value(QStringLiteral("name")).toString();
         m_leafId = conv.value(QStringLiteral("current_leaf_message_uuid")).toString();
@@ -462,6 +493,7 @@ void ClaudeClient::loadConversation()
             m_messages = fresh;
             emit messagesChanged();
         }
+        setLoadingChat(false);
     });
 }
 
