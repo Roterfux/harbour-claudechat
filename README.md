@@ -24,6 +24,10 @@ claude.ai login, stored once, for every request.
   (refreshed while open), send a message into a session, open it in the browser.
 - Usage page (pull down): plan limits with percent used and reset time (5-hour session,
   weekly, weekly per model); 5-hour and weekly percent also in the start page header.
+- Voice via [Speech Note](https://github.com/mkiol/dsnote) (install it with a speech model):
+  mic button in chats and Code sessions; voice mode in chats (pull down): speak, it sends,
+  the answer is read aloud, then it listens again. The app runs without the Sailjail
+  sandbox for this (D-Bus to Speech Note).
 - Notifications: Claude answered (app in the background); a Code session stopped running
   (checked every 30 s while the app runs).
 

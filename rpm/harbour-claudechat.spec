@@ -1,5 +1,5 @@
 Name:       harbour-claudechat
-Version:    0.6.4
+Version:    0.7.1
 Release:    1
 Summary:    Native Claude chat for claude.ai accounts
 License:    BSD
@@ -12,6 +12,7 @@ BuildRequires: pkgconfig(Qt5Core)
 BuildRequires: pkgconfig(Qt5Qml)
 BuildRequires: pkgconfig(Qt5Quick)
 BuildRequires: pkgconfig(Qt5Network)
+BuildRequires: pkgconfig(Qt5DBus)
 BuildRequires: desktop-file-utils
 
 %description

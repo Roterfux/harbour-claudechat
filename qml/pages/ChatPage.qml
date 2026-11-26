@@ -5,6 +5,30 @@ Page {
     id: page
     allowedOrientations: Orientation.All
 
+    // Voice mode: speak -> sent; answer read aloud; then listen again.
+    property bool voiceMode: false
+    onVoiceModeChanged: {
+        if (voiceMode) { speech.checkAvailable(); if (!claude.sending) speech.listen() }
+        else speech.stop()
+    }
+    Component.onDestruction: speech.stop()
+    Connections {
+        target: speech
+        onTextRecognized: {
+            if (page.voiceMode) {
+                claude.send(text)
+                page.scrollDown()
+            } else {
+                field.text = field.text.trim() === "" ? text : field.text.trim() + " " + text
+            }
+        }
+        onSpeechFinished: if (page.voiceMode && !claude.sending) speech.listen()
+    }
+    Connections {
+        target: claude
+        onAnswerFinished: if (page.voiceMode) speech.speak(text)
+    }
+
     // Always jump to the end (newest message) on every update: open, new
     // messages, streaming, poll, reload, back to this page, app to front.
     property bool settling: false
@@ -54,6 +78,10 @@ Page {
         PullDownMenu {
             busy: claude.busy || claude.sending
             MenuItem {
+                text: page.voiceMode ? qsTr("Stop voice mode") : qsTr("Voice mode")
+                onClicked: page.voiceMode = !page.voiceMode
+            }
+            MenuItem {
                 text: qsTr("New chat")
                 onClicked: claude.newConversation()
             }
@@ -73,9 +101,13 @@ Page {
         footer: Column {
             width: list.width
             MessageItem {
-                visible: claude.sending
+                visible: claude.sending && claude.streamText !== ""
                 fromUser: false
-                text: claude.streamText !== "" ? claude.streamText : "…"
+                text: claude.streamText
+            }
+            WorkingIndicator {
+                running: claude.sending
+                text: claude.streamText === "" ? qsTr("Claude is thinking...") : qsTr("Claude is writing...")
             }
             Label {
                 visible: claude.error !== ""
@@ -110,11 +142,16 @@ Page {
 
         TextArea {
             id: field
-            anchors { left: parent.left; right: sendButton.left; bottom: parent.bottom }
-            placeholderText: qsTr("Message Claude")
+            anchors { left: parent.left; right: sendButton.left; rightMargin: Theme.itemSizeSmall; bottom: parent.bottom }
+            placeholderText: speech.listening ? (speech.partialText !== "" ? speech.partialText : qsTr("Listening...")) : qsTr("Message Claude")
             label: ""
             labelVisible: false
             enabled: claude.loggedIn
+        }
+        MicButton {
+            id: micButton
+            anchors { right: sendButton.left; bottom: parent.bottom; bottomMargin: Theme.paddingMedium }
+            voiceMode: page.voiceMode
         }
         IconButton {
             id: sendButton
