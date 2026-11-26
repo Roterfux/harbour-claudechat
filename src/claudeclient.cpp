@@ -95,6 +95,60 @@ ClaudeClient::ClaudeClient(QObject *parent)
 {
     QSettings s(settingsPath(), QSettings::IniFormat);
     m_sessionKey = s.value(QStringLiteral("sessionKey")).toString();
+    s.beginGroup(QStringLiteral("seen"));
+    for (const QString &k : s.childKeys())
+        m_seen.insert(k, s.value(k).toString());
+    s.endGroup();
+}
+
+void ClaudeClient::saveSeen()
+{
+    QSettings s(settingsPath(), QSettings::IniFormat);
+    s.remove(QStringLiteral("seen"));
+    s.beginGroup(QStringLiteral("seen"));
+    for (auto it = m_seen.constBegin(); it != m_seen.constEnd(); ++it)
+        s.setValue(it.key(), it.value());
+    s.endGroup();
+}
+
+// Items not known yet: on the very first list everything counts as seen;
+// later, new items count as not seen (marker until opened).
+void ClaudeClient::rememberItems(const QVariantList &items, const QString &idKey)
+{
+    QSettings s(settingsPath(), QSettings::IniFormat);
+    const QString flag = QStringLiteral("seenInit/") + idKey;
+    const bool init = s.value(flag).toBool();
+    bool changed = false;
+    for (const QVariant &v : items) {
+        const QVariantMap m = v.toMap();
+        const QString id = m.value(idKey).toString();
+        if (id.isEmpty() || m_seen.contains(id))
+            continue;
+        m_seen.insert(id, init ? QString() : m.value(QStringLiteral("updatedAt")).toString());
+        changed = true;
+    }
+    if (!init && !items.isEmpty())
+        s.setValue(flag, true);
+    if (changed) {
+        saveSeen();
+        ++m_seenVersion;
+        emit seenChanged();
+    }
+}
+
+bool ClaudeClient::isNew(const QString &id, const QString &updatedAt) const
+{
+    return m_seen.contains(id) && !updatedAt.isEmpty() && updatedAt > m_seen.value(id);
+}
+
+void ClaudeClient::markSeen(const QString &id, const QString &updatedAt)
+{
+    if (id.isEmpty() || m_seen.value(id) == updatedAt)
+        return;
+    m_seen.insert(id, updatedAt);
+    saveSeen();
+    ++m_seenVersion;
+    emit seenChanged();
 }
 
 QString ClaudeClient::orgPath() const
