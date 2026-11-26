@@ -1,9 +1,38 @@
 import QtQuick 2.2
 import Sailfish.Silica 1.0
+import "../js/listsync.js" as ListSync
 
 Page {
     id: page
     allowedOrientations: Orientation.All
+
+    // Only changed rows are updated (no rebuild of all messages = no flicker).
+    function syncMessages() { ListSync.sync(messageModel, claude.messages) }
+    Connections {
+        target: claude
+        onMessagesChanged: page.syncMessages()
+    }
+    // Streaming text is shown at most ~6 times a second (Markdown re-render).
+    property string shownStream: ""
+    onShownStreamChanged: scrollDown()
+    Timer {
+        id: streamTimer
+        interval: 150
+        onTriggered: page.shownStream = claude.streamText
+    }
+    Connections {
+        target: claude
+        onStreamTextChanged: {
+            if (claude.streamText === "") { streamTimer.stop(); page.shownStream = "" }
+            else if (!streamTimer.running) streamTimer.start()
+        }
+    }
+
+    LoadingBar {
+        anchors.top: parent.top
+        running: claude.busy && !claude.sending
+        z: 10
+    }
 
     // Always jump to the end (newest message) on every update: open, new
     // messages, streaming, poll, reload, back to this page, app to front.
@@ -33,16 +62,15 @@ Page {
         target: claude
         onConversationChanged: page.scrollDown()
         onMessagesChanged: page.scrollDown()
-        onStreamTextChanged: page.scrollDown()
         onSendingChanged: page.scrollDown()
     }
-    Component.onCompleted: scrollDown()
+    Component.onCompleted: { syncMessages(); scrollDown() }
 
     SilicaListView {
         id: list
         anchors { top: parent.top; left: parent.left; right: parent.right; bottom: input.top }
         clip: true
-        model: claude.messages
+        model: ListModel { id: messageModel }
         onContentHeightChanged: if (page.settling) scrollTimer.restart()
         onCountChanged: page.scrollDown()
 
@@ -65,17 +93,17 @@ Page {
         }
 
         delegate: MessageItem {
-            fromUser: modelData.fromUser
-            text: modelData.text
+            fromUser: model.fromUser
+            text: model.text
         }
 
         // Answer while it is streaming in.
         footer: Column {
             width: list.width
             MessageItem {
-                visible: claude.sending && claude.streamText !== ""
+                visible: claude.sending && page.shownStream !== ""
                 fromUser: false
-                text: claude.streamText
+                text: page.shownStream
             }
             WorkingIndicator {
                 running: claude.sending

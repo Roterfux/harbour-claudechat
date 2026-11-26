@@ -52,7 +52,7 @@ signals:
 
 private:
     QNetworkRequest request(const QString &path, bool json = false) const;
-    bool checkReply(QNetworkReply *reply, QByteArray *data);
+    bool checkReply(QNetworkReply *reply, QByteArray *data, bool counted = true);
     void setBusy(bool on);
     void setError(const QString &error);
     void loadSession(bool quiet);
