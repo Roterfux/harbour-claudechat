@@ -5,6 +5,7 @@
 
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -511,4 +512,28 @@ void CodeClient::createSession(const QString &repoUrl, const QString &prompt)
         fetchSessions(true);
         emit sessionCreated(id);
     });
+}
+
+QString CodeClient::fileAsCodeBlock(const QString &filePath)
+{
+    QString path = filePath;
+    if (path.startsWith(QLatin1String("file://")))
+        path = QUrl(path).toLocalFile();
+    QFile f(path);
+    const QString name = QFileInfo(path).fileName();
+    if (!f.open(QIODevice::ReadOnly)) {
+        setError(tr("Cannot read %1").arg(name));
+        return QString();
+    }
+    if (f.size() > 512 * 1024) {
+        setError(tr("%1 is too large (max. 512 KB in a Code session)").arg(name));
+        return QString();
+    }
+    const QByteArray data = f.readAll();
+    if (data.contains('\0')) {
+        setError(tr("%1: only text files can be attached in Code sessions").arg(name));
+        return QString();
+    }
+    setError(QString());
+    return QStringLiteral("%1:\n```\n%2\n```").arg(name, QString::fromUtf8(data));
 }

@@ -50,6 +50,8 @@ public:
     // New session in the same environment as the latest session on that
     // repository; opens it when created (sessionCreated).
     Q_INVOKABLE void createSession(const QString &repoUrl, const QString &prompt);
+    // Text file as a Markdown code block for the message ("" + error on failure).
+    Q_INVOKABLE QString fileAsCodeBlock(const QString &filePath);
 
 signals:
     void busyChanged();

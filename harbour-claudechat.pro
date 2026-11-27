@@ -1,6 +1,11 @@
 TARGET = harbour-claudechat
 
 CONFIG += sailfishapp
+
+# App version = Version: in the spec (shown in Settings).
+APP_VERSION = $$system(sed -n 's/^Version:[[:space:]]*//p' $$PWD/rpm/harbour-claudechat.spec)
+isEmpty(APP_VERSION): APP_VERSION = unknown
+DEFINES += APP_VERSION=\\\"$$APP_VERSION\\\"
 QT += network
 
 SOURCES += src/main.cpp \
