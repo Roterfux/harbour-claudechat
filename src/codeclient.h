@@ -45,6 +45,13 @@ public:
     Q_INVOKABLE void openSession(const QString &id);
     Q_INVOKABLE void closeSession();
     Q_INVOKABLE void send(const QString &text);
+    // Repositories used by existing sessions (for a new session): [{ repo, url }]
+    Q_INVOKABLE QVariantList repositories() const;
+    // New session in the same environment as the latest session on that
+    // repository; opens it when created (sessionCreated).
+    Q_INVOKABLE void createSession(const QString &repoUrl, const QString &prompt);
+    // Text file as a Markdown code block for the message ("" + error on failure).
+    Q_INVOKABLE QString fileAsCodeBlock(const QString &filePath);
 
 signals:
     void busyChanged();
@@ -55,6 +62,7 @@ signals:
     void loadingSessionChanged();
     // A session that was running stopped (finished, waiting for input, failed).
     void sessionFinished(const QString &sessionUuid, const QString &title, const QString &status);
+    void sessionCreated(const QString &sessionUuid);
 
 private:
     QNetworkRequest request(const QString &path, bool json = false) const;

@@ -140,6 +140,12 @@ Page {
                 onClicked: page.refresh()
             }
             MenuItem {
+                text: qsTr("New session")
+                visible: page.codeMode
+                enabled: claude.loggedIn
+                onClicked: pageStack.push(Qt.resolvedUrl("NewCodeSessionPage.qml"))
+            }
+            MenuItem {
                 text: qsTr("New chat")
                 visible: !page.codeMode
                 enabled: claude.loggedIn

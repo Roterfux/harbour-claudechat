@@ -1,5 +1,6 @@
 import QtQuick 2.2
 import Sailfish.Silica 1.0
+import Sailfish.Pickers 1.0
 import "../js/listsync.js" as ListSync
 
 // One Claude Code session: messages and tool calls, refreshed every few
@@ -96,6 +97,10 @@ Page {
         PullDownMenu {
             busy: code.busy
             MenuItem {
+                text: qsTr("Attach text file")
+                onClicked: pageStack.push(filePicker)
+            }
+            MenuItem {
                 text: page.showTools ? qsTr("Hide tool calls") : qsTr("Show tool calls")
                 onClicked: page.showTools = !page.showTools
             }
@@ -163,14 +168,34 @@ Page {
         }
     }
 
+    // Text files go into the message as a code block (Code sessions take
+    // text only).
+    Component {
+        id: filePicker
+        ContentPickerPage {
+            title: qsTr("Attach text file")
+            onSelectedContentPropertiesChanged: {
+                var block = code.fileAsCodeBlock(selectedContentProperties.filePath)
+                if (block !== "")
+                    field.text = (field.text.trim() === "" ? "" : field.text.trim() + "\n\n") + block
+            }
+        }
+    }
+
     Item {
         id: input
         anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
         height: Math.max(field.height, sendButton.height) + Theme.paddingSmall
 
+        IconButton {
+            id: attachButton
+            anchors { left: parent.left; bottom: parent.bottom; bottomMargin: Theme.paddingMedium }
+            icon.source: "image://theme/icon-m-add"
+            onClicked: pageStack.push(filePicker)
+        }
         TextArea {
             id: field
-            anchors { left: parent.left; right: sendButton.left; bottom: parent.bottom }
+            anchors { left: attachButton.right; right: sendButton.left; bottom: parent.bottom }
             placeholderText: qsTr("Message the session")
             label: ""
             labelVisible: false
