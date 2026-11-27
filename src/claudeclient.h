@@ -133,6 +133,7 @@ private:
     qreal m_loadProgress = -1;   // 0..1, -1 = unknown
     QVariantList m_cachedMessages;   // shown only if loading fails
     void setLoadingChat(bool on);
+    void prefetchRecent();
     void saveSeen();
 };
 

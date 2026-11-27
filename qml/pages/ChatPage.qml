@@ -23,7 +23,7 @@ Page {
     }
     Timer {
         id: revealTimer
-        interval: 350      // let rich text lay out first
+        interval: 150      // let rich text lay out first
         onTriggered: { list.positionViewAtEnd(); page.revealed = true; page.scrollDown() }
     }
     Connections {

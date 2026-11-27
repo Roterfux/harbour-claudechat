@@ -49,6 +49,51 @@ QString messageText(const QJsonObject &m)
     return parts.join(QStringLiteral("\n\n"));
 }
 
+// Messages of the current branch (leaf back to the root) of a conversation,
+// as the saved-copy map { name, leaf, updatedAt, messages }.
+QVariantMap conversationCopy(const QJsonObject &conv)
+{
+    QString leaf = conv.value(QStringLiteral("current_leaf_message_uuid")).toString();
+    QHash<QString, QJsonObject> byId;
+    QList<QJsonObject> ordered;
+    const QJsonArray msgs = conv.value(QStringLiteral("chat_messages")).toArray();
+    for (const QJsonValue &v : msgs) {
+        const QJsonObject m = v.toObject();
+        byId.insert(m.value(QStringLiteral("uuid")).toString(), m);
+        ordered << m;
+    }
+    QList<QJsonObject> branch;
+    if (!leaf.isEmpty() && byId.contains(leaf)) {
+        QString cur = leaf;
+        while (byId.contains(cur) && branch.size() <= byId.size()) {
+            const QJsonObject m = byId.value(cur);
+            branch.prepend(m);
+            cur = m.value(QStringLiteral("parent_message_uuid")).toString();
+        }
+    } else {
+        std::sort(ordered.begin(), ordered.end(), [](const QJsonObject &a, const QJsonObject &b) {
+            return a.value(QStringLiteral("index")).toInt() < b.value(QStringLiteral("index")).toInt();
+        });
+        branch = ordered;
+        if (!branch.isEmpty())
+            leaf = branch.last().value(QStringLiteral("uuid")).toString();
+    }
+    QVariantList messages;
+    for (const QJsonObject &m : branch) {
+        QVariantMap item;
+        item[QStringLiteral("uuid")] = m.value(QStringLiteral("uuid")).toString();
+        item[QStringLiteral("fromUser")] = m.value(QStringLiteral("sender")).toString() == QLatin1String("human");
+        item[QStringLiteral("text")] = messageText(m);
+        messages << item;
+    }
+    QVariantMap copy;
+    copy[QStringLiteral("name")] = conv.value(QStringLiteral("name")).toString();
+    copy[QStringLiteral("leaf")] = leaf;
+    copy[QStringLiteral("updatedAt")] = conv.value(QStringLiteral("updated_at")).toString();
+    copy[QStringLiteral("messages")] = messages;
+    return copy;
+}
+
 QString cacheDir()
 {
     return QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + QStringLiteral("/chats");
@@ -374,6 +419,7 @@ void ClaudeClient::refreshConversations()
         m_conversations = fresh;
         writeCache(QStringLiteral("list-") + m_org, m_conversations);
         emit conversationsChanged();
+        prefetchRecent();
     });
 }
 
@@ -382,17 +428,18 @@ void ClaudeClient::openConversation(const QString &uuid)
     stop();
     m_conversationId = uuid;
     m_conversationName.clear();
+    QString listUpdated;
     for (const QVariant &v : m_conversations) {
         const QVariantMap c = v.toMap();
-        if (c.value(QStringLiteral("uuid")).toString() == uuid)
+        if (c.value(QStringLiteral("uuid")).toString() == uuid) {
             m_conversationName = c.value(QStringLiteral("name")).toString();
+            listUpdated = c.value(QStringLiteral("updatedAt")).toString();
+        }
     }
     m_leafId.clear();
     m_messages.clear();
-    // Show the messages from the last visit right away; loadConversation()
-    // replaces them only if something changed.
-    // Messages are shown once the chat is fully loaded (no swapping of
-    // cached and fresh text). The cache is used only if loading fails.
+    // Saved copy: shown at once if unchanged (see below), otherwise only as
+    // the offline fallback while the chat loads.
     const QVariantMap cached = readCache(QStringLiteral("chat-") + uuid).toMap();
     m_cachedMessages = cached.value(QStringLiteral("messages")).toList();
     if (!cached.isEmpty()) {
@@ -400,10 +447,46 @@ void ClaudeClient::openConversation(const QString &uuid)
         if (m_conversationName.isEmpty())
             m_conversationName = cached.value(QStringLiteral("name")).toString();
     }
+    // Unchanged since the saved copy (same last change time as in the chat
+    // list): show it at once; the check with claude.ai runs in the background.
+    const QString cachedUpdated = cached.value(QStringLiteral("updatedAt")).toString();
+    if (!m_cachedMessages.isEmpty() && !cachedUpdated.isEmpty() && cachedUpdated == listUpdated) {
+        m_messages = m_cachedMessages;
+        emit conversationChanged();
+        emit messagesChanged();
+        setLoadingChat(false);
+        loadConversation();
+        return;
+    }
     emit conversationChanged();
     emit messagesChanged();
     setLoadingChat(true);
     loadConversation();
+}
+
+// Loads the newest chats in the background into their saved copies, so
+// opening one is instant (unchanged copies are shown without waiting).
+void ClaudeClient::prefetchRecent()
+{
+    const int count = qMin(4, m_conversations.size());
+    for (int i = 0; i < count; ++i) {
+        const QVariantMap c = m_conversations.at(i).toMap();
+        const QString id = c.value(QStringLiteral("uuid")).toString();
+        const QString updated = c.value(QStringLiteral("updatedAt")).toString();
+        if (id.isEmpty() || id == m_conversationId)
+            continue;
+        if (readCache(QStringLiteral("chat-") + id).toMap().value(QStringLiteral("updatedAt")).toString() == updated)
+            continue;   // saved copy is up to date
+        QNetworkReply *r = m_nam.get(request(orgPath() + QStringLiteral("/chat_conversations/") + id
+                                             + QStringLiteral("?tree=False&rendering_mode=messages")));
+        connect(r, &QNetworkReply::finished, this, [r, id]() {
+            r->deleteLater();
+            const int status = r->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+            if (r->error() != QNetworkReply::NoError || status < 200 || status >= 300)
+                return;   // quietly skipped; opening the chat loads it normally
+            writeCache(QStringLiteral("chat-") + id, conversationCopy(QJsonDocument::fromJson(r->readAll()).object()));
+        });
+    }
 }
 
 void ClaudeClient::setLoadingChat(bool on)
@@ -457,48 +540,10 @@ void ClaudeClient::loadConversation()
             setLoadingChat(false);
             return;
         }
-        const QJsonObject conv = QJsonDocument::fromJson(data).object();
-        m_conversationName = conv.value(QStringLiteral("name")).toString();
-        m_leafId = conv.value(QStringLiteral("current_leaf_message_uuid")).toString();
-
-        QHash<QString, QJsonObject> byId;
-        QList<QJsonObject> ordered;
-        const QJsonArray msgs = conv.value(QStringLiteral("chat_messages")).toArray();
-        for (const QJsonValue &v : msgs) {
-            const QJsonObject m = v.toObject();
-            byId.insert(m.value(QStringLiteral("uuid")).toString(), m);
-            ordered << m;
-        }
-
-        QList<QJsonObject> branch;
-        if (!m_leafId.isEmpty() && byId.contains(m_leafId)) {
-            QString cur = m_leafId;
-            while (byId.contains(cur) && branch.size() <= byId.size()) {
-                const QJsonObject m = byId.value(cur);
-                branch.prepend(m);
-                cur = m.value(QStringLiteral("parent_message_uuid")).toString();
-            }
-        } else {
-            std::sort(ordered.begin(), ordered.end(), [](const QJsonObject &a, const QJsonObject &b) {
-                return a.value(QStringLiteral("index")).toInt() < b.value(QStringLiteral("index")).toInt();
-            });
-            branch = ordered;
-            if (!branch.isEmpty())
-                m_leafId = branch.last().value(QStringLiteral("uuid")).toString();
-        }
-
-        QVariantList fresh;
-        for (const QJsonObject &m : branch) {
-            QVariantMap item;
-            item[QStringLiteral("uuid")] = m.value(QStringLiteral("uuid")).toString();
-            item[QStringLiteral("fromUser")] = m.value(QStringLiteral("sender")).toString() == QLatin1String("human");
-            item[QStringLiteral("text")] = messageText(m);
-            fresh << item;
-        }
-        QVariantMap cache;
-        cache[QStringLiteral("name")] = m_conversationName;
-        cache[QStringLiteral("leaf")] = m_leafId;
-        cache[QStringLiteral("messages")] = fresh;
+        const QVariantMap cache = conversationCopy(QJsonDocument::fromJson(data).object());
+        m_conversationName = cache.value(QStringLiteral("name")).toString();
+        m_leafId = cache.value(QStringLiteral("leaf")).toString();
+        const QVariantList fresh = cache.value(QStringLiteral("messages")).toList();
         writeCache(QStringLiteral("chat-") + id, cache);
         emit conversationChanged();
         if (fresh != m_messages) {
