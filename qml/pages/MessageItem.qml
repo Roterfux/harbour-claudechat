@@ -22,6 +22,7 @@ ListItem {
 
     Rectangle {
         id: bubble
+        clip: true   // wide tables/code never draw over other messages
         x: item.fromUser ? 3 * Theme.horizontalPageMargin : Theme.horizontalPageMargin
         y: Theme.paddingMedium / 2
         width: item.width - 4 * Theme.horizontalPageMargin

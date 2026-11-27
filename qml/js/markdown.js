@@ -107,7 +107,7 @@ function convert(md, opts) {
             i++
             out.push("<table width=\"100%\" cellpadding=\"8\" style=\"background-color:" + o.codeBg + "\"><tr><td>"
                      + (lang ? "<small style=\"color:" + o.quoteColor + "\">" + escapeHtml(lang) + "</small><br>" : "")
-                     + "<pre style=\"color:" + o.codeColor + "\">" + escapeHtml(code.join("\n")) + "</pre></td></tr></table>")
+                     + "<pre style=\"white-space:pre-wrap; color:" + o.codeColor + "\">" + escapeHtml(code.join("\n")) + "</pre></td></tr></table>")
             continue
         }
 
