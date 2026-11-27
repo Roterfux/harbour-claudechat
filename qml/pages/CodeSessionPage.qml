@@ -139,12 +139,6 @@ Page {
             text: code.error !== "" ? code.error : qsTr("No messages")
         }
 
-        BusyIndicator {
-            anchors.centerIn: parent
-            size: BusyIndicatorSize.Large
-            running: code.busy && list.count === 0
-        }
-
         VerticalScrollDecorator {}
     }
 
