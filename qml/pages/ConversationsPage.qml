@@ -14,7 +14,7 @@ Page {
             if (u.key === "five_hour") parts.push(qsTr("5h %1%").arg(Math.round(u.percent)))
             else if (u.key === "seven_day") parts.push(qsTr("week %1%").arg(Math.round(u.percent)))
         }
-        return parts.length ? " \u00b7 " + parts.join(" \u00b7 ") : ""
+        return parts.join(" \u00b7 ")
     }
 
     // Local date/time of an ISO time: "14:05" today, else "Mon 24.11. 14:05".
@@ -80,7 +80,7 @@ Page {
             width: list.width
             PageHeader {
                 title: page.codeMode ? qsTr("Code") : qsTr("Claude")
-                description: claude.account + page.usageSummary
+                description: page.usageSummary
             }
             // Claude | Code switch
             Row {
