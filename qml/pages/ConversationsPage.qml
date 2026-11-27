@@ -127,6 +127,10 @@ Page {
                 onClicked: page.codeMode = !page.codeMode
             }
             MenuItem {
+                text: qsTr("Settings")
+                onClicked: pageStack.push(Qt.resolvedUrl("SettingsPage.qml"))
+            }
+            MenuItem {
                 text: qsTr("Usage")
                 enabled: claude.loggedIn
                 onClicked: pageStack.push(Qt.resolvedUrl("UsagePage.qml"))
@@ -216,13 +220,13 @@ Page {
                                     : (claude.loggedIn ? qsTr("Pull down to start a new chat") : qsTr("Pull down to retry"))
         }
 
-        BusyIndicator {
-            anchors.centerIn: parent
-            size: BusyIndicatorSize.Large
-            running: (claude.busy || code.busy) && list.count === 0
-        }
-
         VerticalScrollDecorator {}
+    }
+
+    LoadingBar {
+        anchors.top: parent.top
+        running: claude.busy || code.busy
+        z: 10
     }
 
     RemorsePopup { id: remorse }

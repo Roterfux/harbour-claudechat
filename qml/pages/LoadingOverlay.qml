@@ -2,7 +2,7 @@ import QtQuick 2.2
 import Sailfish.Silica 1.0
 
 // Centered "loading" view while a chat/session loads before it is shown:
-// spinner, progress bar (percent when known, else running bar) and text.
+// progress bar (percent when known, else running bar) and text.
 Column {
     id: overlay
     property bool active: false
@@ -16,11 +16,6 @@ Column {
     opacity: active ? 1 : 0
     Behavior on opacity { FadeAnimation {} }
 
-    BusyIndicator {
-        anchors.horizontalCenter: parent.horizontalCenter
-        size: BusyIndicatorSize.Large
-        running: overlay.active
-    }
     ProgressBar {
         width: parent.width
         visible: overlay.progress >= 0

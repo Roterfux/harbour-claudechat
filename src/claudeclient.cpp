@@ -95,10 +95,22 @@ ClaudeClient::ClaudeClient(QObject *parent)
 {
     QSettings s(settingsPath(), QSettings::IniFormat);
     m_sessionKey = s.value(QStringLiteral("sessionKey")).toString();
+    m_textScale = s.value(QStringLiteral("textScale"), 0.85).toReal();
     s.beginGroup(QStringLiteral("seen"));
     for (const QString &k : s.childKeys())
         m_seen.insert(k, s.value(k).toString());
     s.endGroup();
+}
+
+void ClaudeClient::setTextScale(qreal scale)
+{
+    scale = qBound<qreal>(0.6, scale, 1.4);
+    if (qFuzzyCompare(scale, m_textScale))
+        return;
+    m_textScale = scale;
+    QSettings s(settingsPath(), QSettings::IniFormat);
+    s.setValue(QStringLiteral("textScale"), m_textScale);
+    emit textScaleChanged();
 }
 
 void ClaudeClient::saveSeen()
