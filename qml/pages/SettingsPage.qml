@@ -17,6 +17,11 @@ Page {
 
             PageHeader { title: qsTr("Settings") }
 
+            DetailItem {
+                label: qsTr("Version")
+                value: Qt.application.version
+            }
+
             SectionHeader { text: qsTr("Text size") }
 
             Slider {

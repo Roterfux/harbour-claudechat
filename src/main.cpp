@@ -5,6 +5,10 @@
 #include <sailfishapp.h>
 
 #include "claudeclient.h"
+
+#ifndef APP_VERSION
+#define APP_VERSION "unknown"
+#endif
 #include "codeclient.h"
 
 int main(int argc, char *argv[])
@@ -12,6 +16,7 @@ int main(int argc, char *argv[])
     QScopedPointer<QGuiApplication> app(SailfishApp::application(argc, argv));
     app->setOrganizationName(QStringLiteral("org.roterfux"));
     app->setApplicationName(QStringLiteral("harbour-claudechat"));
+    app->setApplicationVersion(QStringLiteral(APP_VERSION));
 
     ClaudeClient client;
     CodeClient code(&client);
