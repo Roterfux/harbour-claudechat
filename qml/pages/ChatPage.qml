@@ -152,12 +152,6 @@ Page {
             text: qsTr("Ask Claude anything")
         }
 
-        BusyIndicator {
-            anchors.centerIn: parent
-            size: BusyIndicatorSize.Large
-            running: claude.busy && list.count === 0 && !claude.sending
-        }
-
         VerticalScrollDecorator {}
     }
 
