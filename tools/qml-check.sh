@@ -79,6 +79,19 @@ QtObject {
     function publish() {}
 }
 EOF
+mkdir -p "$W/stub/Sailfish/Pickers"
+cat > "$W/stub/Sailfish/Pickers/qmldir" <<'EOF'
+module Sailfish.Pickers
+ContentPickerPage 1.0 ContentPickerPage.qml
+EOF
+cat > "$W/stub/Sailfish/Pickers/ContentPickerPage.qml" <<'EOF'
+import QtQuick 2.0
+import Sailfish.Silica 1.0
+Page {
+    property string title
+    property var selectedContentProperties
+}
+EOF
 cat > "$W/stub/Sailfish/WebView/WebViewPage.qml" <<'EOF'
 import QtQuick 2.0
 import Sailfish.Silica 1.0

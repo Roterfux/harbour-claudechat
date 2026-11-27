@@ -5,6 +5,9 @@
 #include <QDir>
 #include <QHash>
 #include <QFile>
+#include <QFileInfo>
+#include <QHttpMultiPart>
+#include <QMimeDatabase>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -253,6 +256,8 @@ void ClaudeClient::logout()
         s.remove(QStringLiteral("sessionKey"));
     }
     QDir(cacheDir()).removeRecursively();
+    m_pending.clear();
+    emit attachmentsChanged();
     m_conversations.clear();
     m_messages.clear();
     m_conversationId.clear();
@@ -557,19 +562,40 @@ void ClaudeClient::loadConversation()
 void ClaudeClient::send(const QString &text)
 {
     const QString prompt = text.trimmed();
-    if (prompt.isEmpty() || m_org.isEmpty() || sending())
+    if ((prompt.isEmpty() && m_pending.isEmpty()) || m_org.isEmpty() || sending() || !attachmentsReady())
         return;
     setError(QString());
+
+    // Text files go along as "attachments" (content inline), uploaded
+    // images/PDFs as "files" (their upload ids).
+    QVariantList attachments, files;
+    QStringList names;
+    for (const QVariantMap &a : m_pending) {
+        names << QStringLiteral("\U0001F4CE ") + a.value(QStringLiteral("name")).toString();
+        if (a.value(QStringLiteral("kind")).toString() == QLatin1String("text")) {
+            QVariantMap att;
+            att[QStringLiteral("file_name")] = a.value(QStringLiteral("name"));
+            att[QStringLiteral("file_type")] = a.value(QStringLiteral("mime"));
+            att[QStringLiteral("file_size")] = a.value(QStringLiteral("size"));
+            att[QStringLiteral("extracted_content")] = a.value(QStringLiteral("content"));
+            attachments << att;
+        } else {
+            files << a.value(QStringLiteral("uuid"));
+        }
+    }
+    m_pending.clear();
+    emit attachmentsChanged();
 
     QVariantMap user;
     user[QStringLiteral("uuid")] = QString();
     user[QStringLiteral("fromUser")] = true;
-    user[QStringLiteral("text")] = prompt;
+    user[QStringLiteral("text")] = names.isEmpty() ? prompt
+                                                   : (prompt + QStringLiteral("\n\n") + names.join(QStringLiteral("\n"))).trimmed();
     m_messages << user;
     emit messagesChanged();
 
     if (!m_conversationId.isEmpty()) {
-        startCompletion(prompt);
+        startCompletion(prompt, attachments, files);
         return;
     }
 
@@ -578,7 +604,7 @@ void ClaudeClient::send(const QString &text)
     body[QStringLiteral("uuid")] = newUuid();
     body[QStringLiteral("name")] = QString();
     QNetworkReply *r = post(orgPath() + QStringLiteral("/chat_conversations"), body);
-    connect(r, &QNetworkReply::finished, this, [this, r, prompt]() {
+    connect(r, &QNetworkReply::finished, this, [this, r, prompt, attachments, files]() {
         QByteArray data;
         if (!checkReply(r, &data)) {
             if (!m_messages.isEmpty())
@@ -590,18 +616,150 @@ void ClaudeClient::send(const QString &text)
         m_leafId.clear();
         emit conversationChanged();
         m_pendingPrompt = prompt;
-        startCompletion(prompt);
+        startCompletion(prompt, attachments, files);
     });
 }
 
-void ClaudeClient::startCompletion(const QString &text)
+QVariantList ClaudeClient::attachments() const
+{
+    QVariantList list;
+    for (const QVariantMap &a : m_pending) {
+        QVariantMap m;
+        m[QStringLiteral("name")] = a.value(QStringLiteral("name"));
+        m[QStringLiteral("kind")] = a.value(QStringLiteral("kind"));
+        m[QStringLiteral("uploading")] = a.value(QStringLiteral("uploading")).toBool();
+        m[QStringLiteral("error")] = a.value(QStringLiteral("error")).toString();
+        list << m;
+    }
+    return list;
+}
+
+bool ClaudeClient::attachmentsReady() const
+{
+    for (const QVariantMap &a : m_pending)
+        if (a.value(QStringLiteral("uploading")).toBool() || !a.value(QStringLiteral("error")).toString().isEmpty())
+            return false;
+    return true;
+}
+
+void ClaudeClient::removeAttachment(int index)
+{
+    if (index < 0 || index >= m_pending.size())
+        return;
+    m_pending.removeAt(index);
+    emit attachmentsChanged();
+}
+
+// Text files (by MIME type or a known source extension, up to 2 MB) are
+// read and sent inline. Images and PDFs are uploaded to claude.ai first.
+void ClaudeClient::addAttachment(const QString &filePath)
+{
+    QString path = filePath;
+    if (path.startsWith(QLatin1String("file://")))
+        path = QUrl(path).toLocalFile();
+    QFileInfo info(path);
+    if (!info.isFile()) {
+        setError(tr("File not found: %1").arg(path));
+        return;
+    }
+    const QMimeType mime = QMimeDatabase().mimeTypeForFile(info);
+    static const QStringList textExt = {
+        QStringLiteral("txt"), QStringLiteral("md"), QStringLiteral("csv"), QStringLiteral("json"),
+        QStringLiteral("xml"), QStringLiteral("yaml"), QStringLiteral("yml"), QStringLiteral("ini"),
+        QStringLiteral("log"), QStringLiteral("qml"), QStringLiteral("js"), QStringLiteral("ts"),
+        QStringLiteral("py"), QStringLiteral("c"), QStringLiteral("cpp"), QStringLiteral("h"),
+        QStringLiteral("hpp"), QStringLiteral("java"), QStringLiteral("kt"), QStringLiteral("go"),
+        QStringLiteral("rs"), QStringLiteral("sh"), QStringLiteral("html"), QStringLiteral("css"),
+        QStringLiteral("sql"), QStringLiteral("pro"), QStringLiteral("spec"), QStringLiteral("conf") };
+    const bool isText = mime.inherits(QStringLiteral("text/plain"))
+                        || textExt.contains(info.suffix().toLower());
+
+    QVariantMap a;
+    a[QStringLiteral("name")] = info.fileName();
+    a[QStringLiteral("mime")] = mime.name();
+    a[QStringLiteral("size")] = info.size();
+
+    if (isText) {
+        if (info.size() > 2 * 1024 * 1024) {
+            setError(tr("%1 is too large (max. 2 MB for text)").arg(info.fileName()));
+            return;
+        }
+        QFile f(path);
+        if (!f.open(QIODevice::ReadOnly)) {
+            setError(tr("Cannot read %1").arg(info.fileName()));
+            return;
+        }
+        a[QStringLiteral("kind")] = QStringLiteral("text");
+        a[QStringLiteral("content")] = QString::fromUtf8(f.readAll());
+        m_pending << a;
+        emit attachmentsChanged();
+        return;
+    }
+
+    if (!mime.name().startsWith(QLatin1String("image/")) && mime.name() != QLatin1String("application/pdf")) {
+        setError(tr("%1: only text files, images and PDFs can be attached").arg(info.fileName()));
+        return;
+    }
+    if (info.size() > 30 * 1024 * 1024) {
+        setError(tr("%1 is too large (max. 30 MB)").arg(info.fileName()));
+        return;
+    }
+    QFile *file = new QFile(path);
+    if (!file->open(QIODevice::ReadOnly)) {
+        delete file;
+        setError(tr("Cannot read %1").arg(info.fileName()));
+        return;
+    }
+    const QString key = newUuid();
+    a[QStringLiteral("kind")] = QStringLiteral("file");
+    a[QStringLiteral("key")] = key;
+    a[QStringLiteral("uploading")] = true;
+    m_pending << a;
+    emit attachmentsChanged();
+
+    QHttpMultiPart *multi = new QHttpMultiPart(QHttpMultiPart::FormDataType);
+    QHttpPart part;
+    part.setHeader(QNetworkRequest::ContentTypeHeader, mime.name());
+    part.setHeader(QNetworkRequest::ContentDispositionHeader,
+                   QStringLiteral("form-data; name=\"file\"; filename=\"%1\"").arg(info.fileName()));
+    part.setBodyDevice(file);
+    file->setParent(multi);
+    multi->append(part);
+
+    QNetworkRequest req = request(QStringLiteral("/api/") + m_org + QStringLiteral("/upload"));
+    QNetworkReply *r = m_nam.post(req, multi);
+    multi->setParent(r);
+    connect(r, &QNetworkReply::finished, this, [this, r, key]() {
+        r->deleteLater();
+        const QByteArray body = r->readAll();
+        const int status = r->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        for (QVariantMap &a : m_pending) {
+            if (a.value(QStringLiteral("key")).toString() != key)
+                continue;
+            a[QStringLiteral("uploading")] = false;
+            const QJsonObject obj = QJsonDocument::fromJson(body).object();
+            const QString uuid = obj.value(QStringLiteral("file_uuid")).toString();
+            if (r->error() == QNetworkReply::NoError && status >= 200 && status < 300 && !uuid.isEmpty()) {
+                a[QStringLiteral("uuid")] = uuid;
+            } else {
+                QString msg = obj.value(QStringLiteral("error")).toObject().value(QStringLiteral("message")).toString();
+                if (msg.isEmpty())
+                    msg = status ? QStringLiteral("HTTP %1").arg(status) : r->errorString();
+                a[QStringLiteral("error")] = tr("upload failed: %1").arg(msg);
+            }
+        }
+        emit attachmentsChanged();
+    });
+}
+
+void ClaudeClient::startCompletion(const QString &text, const QVariantList &attachments, const QVariantList &files)
 {
     QVariantMap body;
     body[QStringLiteral("prompt")] = text;
     body[QStringLiteral("parent_message_uuid")] = m_leafId.isEmpty() ? RootParent : m_leafId;
     body[QStringLiteral("timezone")] = QString::fromUtf8(QTimeZone::systemTimeZoneId());
-    body[QStringLiteral("attachments")] = QVariantList();
-    body[QStringLiteral("files")] = QVariantList();
+    body[QStringLiteral("attachments")] = attachments;
+    body[QStringLiteral("files")] = files;
     body[QStringLiteral("sync_sources")] = QVariantList();
     body[QStringLiteral("rendering_mode")] = QStringLiteral("messages");
 
