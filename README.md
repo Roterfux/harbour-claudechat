@@ -20,6 +20,8 @@ claude.ai login, stored once, for every request.
 - Answers stream in; stop button while streaming.
 - Markdown in answers: code blocks, inline code, headings, bold/italic, lists, quotes, tables, links.
 - Delete a chat (long press), copy a message (long press).
+- Attach files to a message (paperclip): text/code files are sent inline; images and PDFs
+  are uploaded to claude.ai (`POST /api/{org}/upload`, unverified).
 - Claude | Code switch: Claude Code sessions (claude.ai/code): list, read messages and tool calls
   (refreshed while open), send a message into a session, open it in the browser.
 - Usage page (pull down): plan limits with percent used and reset time (5-hour session,
