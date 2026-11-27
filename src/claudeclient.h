@@ -31,6 +31,8 @@ class ClaudeClient : public QObject
     Q_PROPERTY(int seenVersion READ seenVersion NOTIFY seenChanged)
     // First load of an opened chat: true until all messages are there.
     Q_PROPERTY(bool loadingChat READ loadingChat NOTIFY loadingChatChanged)
+    // Message text size as a factor of the normal size (setting).
+    Q_PROPERTY(qreal textScale READ textScale WRITE setTextScale NOTIFY textScaleChanged)
     Q_PROPERTY(qreal loadProgress READ loadProgress NOTIFY loadingChatChanged)
 
 public:
@@ -51,6 +53,8 @@ public:
     QString usageError() const { return m_usageError; }
     int seenVersion() const { return m_seenVersion; }
     bool loadingChat() const { return m_loadingChat; }
+    qreal textScale() const { return m_textScale; }
+    void setTextScale(qreal scale);
     qreal loadProgress() const { return m_loadProgress; }
 
     // For CodeClient (same login).
@@ -87,6 +91,7 @@ signals:
     void usageChanged();
     void seenChanged();
     void loadingChatChanged();
+    void textScaleChanged();
 
 private:
     QNetworkRequest request(const QString &path, bool json = false) const;
@@ -124,6 +129,7 @@ private:
     QHash<QString, QString> m_seen;   // id -> updatedAt when last seen ("" = never)
     int m_seenVersion = 0;
     bool m_loadingChat = false;
+    qreal m_textScale = 0.85;
     qreal m_loadProgress = -1;   // 0..1, -1 = unknown
     QVariantList m_cachedMessages;   // shown only if loading fails
     void setLoadingChat(bool on);
