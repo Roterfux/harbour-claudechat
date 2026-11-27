@@ -46,7 +46,22 @@ function splitRow(line) {
     return s.split("|").map(function(c) { return c.trim() })
 }
 
+// Converted text is kept (by text and colours), so rows that are redrawn
+// or recreated while scrolling do not convert the same Markdown again.
+var memo = {}
+var memoSize = 0
 function toHtml(md, opts) {
+    var key = JSON.stringify(opts || {}) + "\u0001" + (md || "")
+    if (memo.hasOwnProperty(key))
+        return memo[key]
+    var html = convert(md, opts)
+    if (memoSize > 400) { memo = {}; memoSize = 0 }
+    memo[key] = html
+    memoSize++
+    return html
+}
+
+function convert(md, opts) {
     var o = opts || {}
     o.codeBg = o.codeBg || "#33000000"
     o.codeColor = o.codeColor || "#000000"

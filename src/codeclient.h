@@ -81,6 +81,8 @@ private:
     QStringList m_eventIds;
     QVariantList m_messages;    // display items built from m_events
     bool m_loadingSession = false;
+    QString m_lastEventId;      // position in the server's event list
+    void saveEvents();
     void setLoadingSession(bool on);
 };
 
