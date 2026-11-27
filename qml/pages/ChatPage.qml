@@ -1,5 +1,6 @@
 import QtQuick 2.2
 import Sailfish.Silica 1.0
+import Sailfish.Pickers 1.0
 import "../js/listsync.js" as ListSync
 
 Page {
@@ -155,14 +156,67 @@ Page {
         VerticalScrollDecorator {}
     }
 
+    Component {
+        id: filePicker
+        ContentPickerPage {
+            title: qsTr("Attach file")
+            onSelectedContentPropertiesChanged: claude.addAttachment(selectedContentProperties.filePath)
+        }
+    }
+
     Item {
         id: input
         anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
-        height: Math.max(field.height, sendButton.height) + Theme.paddingSmall
+        height: attachRow.height + Math.max(field.height, sendButton.height) + Theme.paddingSmall
+
+        // Attached files (tap the x to remove).
+        Flow {
+            id: attachRow
+            anchors { left: parent.left; right: parent.right; top: parent.top
+                      leftMargin: Theme.horizontalPageMargin; rightMargin: Theme.horizontalPageMargin }
+            spacing: Theme.paddingSmall
+            height: claude.attachments.length > 0 ? implicitHeight + Theme.paddingSmall : 0
+            Repeater {
+                model: claude.attachments
+                Rectangle {
+                    height: chipRow.height
+                    width: chipRow.width + Theme.paddingMedium
+                    radius: height / 2
+                    color: Theme.rgba(modelData.error !== "" ? "red" : Theme.highlightBackgroundColor, 0.25)
+                    Row {
+                        id: chipRow
+                        anchors.centerIn: parent
+                        Label {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "\uD83D\uDCCE " + modelData.name
+                                  + (modelData.uploading ? " \u2026" : "")
+                                  + (modelData.error !== "" ? " (" + modelData.error + ")" : "")
+                            font.pixelSize: Theme.fontSizeExtraSmall
+                            truncationMode: TruncationMode.Fade
+                            width: Math.min(implicitWidth, input.width * 0.7)
+                        }
+                        IconButton {
+                            width: Theme.iconSizeSmall + Theme.paddingSmall
+                            height: width
+                            icon.source: "image://theme/icon-s-clear-opaque-cross"
+                            onClicked: claude.removeAttachment(index)
+                        }
+                    }
+                }
+            }
+        }
+
+        IconButton {
+            id: attachButton
+            anchors { left: parent.left; bottom: parent.bottom; bottomMargin: Theme.paddingMedium }
+            icon.source: "image://theme/icon-m-attach"
+            enabled: claude.loggedIn && !claude.sending
+            onClicked: pageStack.push(filePicker)
+        }
 
         TextArea {
             id: field
-            anchors { left: parent.left; right: sendButton.left; bottom: parent.bottom }
+            anchors { left: attachButton.right; right: sendButton.left; bottom: parent.bottom }
             placeholderText: qsTr("Message Claude")
             label: ""
             labelVisible: false
@@ -172,7 +226,13 @@ Page {
             id: sendButton
             anchors { right: parent.right; rightMargin: Theme.paddingMedium; bottom: parent.bottom; bottomMargin: Theme.paddingMedium }
             icon.source: claude.sending ? "image://theme/icon-m-clear" : "image://theme/icon-m-send"
-            enabled: claude.sending || (claude.loggedIn && field.text.trim() !== "")
+            enabled: claude.sending || (claude.loggedIn && attachmentsOk
+                                        && (field.text.trim() !== "" || claude.attachments.length > 0))
+            property bool attachmentsOk: {
+                for (var i = 0; i < claude.attachments.length; ++i)
+                    if (claude.attachments[i].uploading || claude.attachments[i].error !== "") return false
+                return true
+            }
             onClicked: {
                 if (claude.sending) {
                     claude.stop()

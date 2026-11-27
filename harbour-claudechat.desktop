@@ -8,6 +8,6 @@ X-Nemo-Application-Type=silica-qt5
 X-Nemo-Single-Instance=yes
 
 [X-Sailjail]
-Permissions=Internet
+Permissions=Internet;Pictures;Documents;Downloads
 OrganizationName=org.roterfux
 ApplicationName=harbour-claudechat

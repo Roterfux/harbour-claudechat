@@ -31,6 +31,8 @@ class ClaudeClient : public QObject
     Q_PROPERTY(int seenVersion READ seenVersion NOTIFY seenChanged)
     // First load of an opened chat: true until all messages are there.
     Q_PROPERTY(bool loadingChat READ loadingChat NOTIFY loadingChatChanged)
+    // Files attached to the next message: { name, kind ("text"/"file"), uploading, error }.
+    Q_PROPERTY(QVariantList attachments READ attachments NOTIFY attachmentsChanged)
     // Message text size as a factor of the normal size (setting).
     Q_PROPERTY(qreal textScale READ textScale WRITE setTextScale NOTIFY textScaleChanged)
     Q_PROPERTY(qreal loadProgress READ loadProgress NOTIFY loadingChatChanged)
@@ -53,6 +55,7 @@ public:
     QString usageError() const { return m_usageError; }
     int seenVersion() const { return m_seenVersion; }
     bool loadingChat() const { return m_loadingChat; }
+    QVariantList attachments() const;
     qreal textScale() const { return m_textScale; }
     void setTextScale(qreal scale);
     qreal loadProgress() const { return m_loadProgress; }
@@ -68,6 +71,9 @@ public:
     Q_INVOKABLE void openConversation(const QString &uuid);
     Q_INVOKABLE void newConversation();
     Q_INVOKABLE void send(const QString &text);
+    Q_INVOKABLE void addAttachment(const QString &filePath);
+    Q_INVOKABLE void removeAttachment(int index);
+    Q_INVOKABLE bool attachmentsReady() const;
     Q_INVOKABLE void stop();
     Q_INVOKABLE void deleteConversation(const QString &uuid);
     Q_INVOKABLE void refreshUsage();
@@ -91,6 +97,7 @@ signals:
     void usageChanged();
     void seenChanged();
     void loadingChatChanged();
+    void attachmentsChanged();
     void textScaleChanged();
 
 private:
@@ -102,7 +109,7 @@ private:
     void setBusy(bool on);
     void setLoggedIn(bool on);
     void loadConversation();
-    void startCompletion(const QString &text);
+    void startCompletion(const QString &text, const QVariantList &attachments, const QVariantList &files);
     void handleStreamData();
     void handleStreamLine(const QByteArray &line);
     void setTitle(const QString &firstPrompt);
@@ -129,6 +136,7 @@ private:
     QHash<QString, QString> m_seen;   // id -> updatedAt when last seen ("" = never)
     int m_seenVersion = 0;
     bool m_loadingChat = false;
+    QList<QVariantMap> m_pending;   // attachments for the next message
     qreal m_textScale = 0.85;
     qreal m_loadProgress = -1;   // 0..1, -1 = unknown
     QVariantList m_cachedMessages;   // shown only if loading fails
