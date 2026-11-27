@@ -109,6 +109,11 @@ Page {
         PullDownMenu {
             busy: claude.busy || claude.sending
             MenuItem {
+                text: qsTr("Attach file")
+                enabled: claude.loggedIn && !claude.sending
+                onClicked: pageStack.push(filePicker)
+            }
+            MenuItem {
                 text: qsTr("New chat")
                 onClicked: claude.newConversation()
             }
@@ -209,7 +214,7 @@ Page {
         IconButton {
             id: attachButton
             anchors { left: parent.left; bottom: parent.bottom; bottomMargin: Theme.paddingMedium }
-            icon.source: "image://theme/icon-m-attach"
+            icon.source: "image://theme/icon-m-add"
             enabled: claude.loggedIn && !claude.sending
             onClicked: pageStack.push(filePicker)
         }
