@@ -9,6 +9,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QNetworkReply>
+#include <QRegularExpression>
 #include <QStandardPaths>
 #include <QUrl>
 #include <QUrlQuery>
@@ -172,6 +173,17 @@ void CodeClient::fetchSessions(bool quiet)
             m[QStringLiteral("title")] = str(s, "title");
             m[QStringLiteral("status")] = str(s, "session_status");
             m[QStringLiteral("updatedAt")] = str(s, "updated_at");
+            // Setup reused for new sessions: environment, repository, model.
+            m[QStringLiteral("environmentId")] = str(s, "environment_id");
+            const QVariantMap ctx = s.value(QStringLiteral("session_context")).toMap();
+            m[QStringLiteral("model")] = ctx.value(QStringLiteral("model")).toString();
+            for (const QVariant &src : ctx.value(QStringLiteral("sources")).toList()) {
+                const QVariantMap sm = src.toMap();
+                if (str(sm, "type") == QLatin1String("git_repository") && !str(sm, "url").isEmpty()) {
+                    m[QStringLiteral("repoUrl")] = str(sm, "url");
+                    break;
+                }
+            }
             m_sessions << m;
 
             const QString id = str(s, "id");
@@ -413,5 +425,90 @@ void CodeClient::send(const QString &text)
     connect(r, &QNetworkReply::finished, this, [this, r]() {
         if (checkReply(r, nullptr))
             loadSession(true);
+    });
+}
+
+QVariantList CodeClient::repositories() const
+{
+    QVariantList list;
+    QStringList seen;
+    for (const QVariant &v : m_sessions) {   // newest first
+        const QString url = v.toMap().value(QStringLiteral("repoUrl")).toString();
+        if (url.isEmpty() || seen.contains(url))
+            continue;
+        seen << url;
+        QString repo = url;
+        repo.remove(QRegularExpression(QStringLiteral("^https?://(www\\.)?github\\.com/")));
+        repo.remove(QRegularExpression(QStringLiteral("\\.git$")));
+        QVariantMap m;
+        m[QStringLiteral("repo")] = repo;
+        m[QStringLiteral("url")] = url;
+        list << m;
+    }
+    return list;
+}
+
+void CodeClient::createSession(const QString &repoUrl, const QString &prompt)
+{
+    const QString text = prompt.trimmed();
+    if (text.isEmpty() || repoUrl.isEmpty())
+        return;
+    QVariantMap tmpl;
+    for (const QVariant &v : m_sessions) {
+        const QVariantMap m = v.toMap();
+        if (m.value(QStringLiteral("repoUrl")).toString() == repoUrl
+                && !m.value(QStringLiteral("environmentId")).toString().isEmpty()) {
+            tmpl = m;
+            break;
+        }
+    }
+    if (tmpl.isEmpty()) {
+        setError(tr("No existing session with this repository to copy the setup from"));
+        return;
+    }
+
+    QString uuid = QUuid::createUuid().toString();
+    uuid = uuid.mid(1, uuid.length() - 2);
+    QJsonObject message;
+    message[QStringLiteral("role")] = QStringLiteral("user");
+    message[QStringLiteral("content")] = text;
+    QJsonObject data;
+    data[QStringLiteral("uuid")] = uuid;
+    data[QStringLiteral("session_id")] = QString();
+    data[QStringLiteral("type")] = QStringLiteral("user");
+    data[QStringLiteral("parent_tool_use_id")] = QJsonValue::Null;
+    data[QStringLiteral("message")] = message;
+    QJsonObject event;
+    event[QStringLiteral("type")] = QStringLiteral("event");
+    event[QStringLiteral("data")] = data;
+
+    QJsonObject source;
+    source[QStringLiteral("type")] = QStringLiteral("git_repository");
+    source[QStringLiteral("url")] = repoUrl;
+    QJsonObject ctx;
+    ctx[QStringLiteral("sources")] = QJsonArray() << source;
+    if (!tmpl.value(QStringLiteral("model")).toString().isEmpty())
+        ctx[QStringLiteral("model")] = tmpl.value(QStringLiteral("model")).toString();
+
+    QJsonObject body;
+    body[QStringLiteral("title")] = text.left(60).simplified();
+    body[QStringLiteral("events")] = QJsonArray() << event;
+    body[QStringLiteral("session_context")] = ctx;
+    body[QStringLiteral("environment_id")] = tmpl.value(QStringLiteral("environmentId")).toString();
+
+    setBusy(true);
+    QNetworkReply *r = m_nam.post(request(QStringLiteral("/v1/sessions"), true),
+                                  QJsonDocument(body).toJson(QJsonDocument::Compact));
+    connect(r, &QNetworkReply::finished, this, [this, r]() {
+        QByteArray data;
+        if (!checkReply(r, &data))
+            return;
+        const QString id = QJsonDocument::fromJson(data).object().value(QStringLiteral("id")).toString();
+        if (id.isEmpty()) {
+            setError(tr("Session created, but no id in the answer"));
+            return;
+        }
+        fetchSessions(true);
+        emit sessionCreated(id);
     });
 }
