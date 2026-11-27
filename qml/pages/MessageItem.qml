@@ -44,7 +44,7 @@ ListItem {
                 ruleColor: Theme.secondaryColor.toString()
             })
             wrapMode: Text.Wrap
-            font.pixelSize: Theme.fontSizeSmall
+            font.pixelSize: Math.round(Theme.fontSizeMedium * claude.textScale)
             color: item.fromUser ? Theme.highlightColor : Theme.primaryColor
             linkColor: Theme.highlightColor
             onLinkActivated: Qt.openUrlExternally(link)
