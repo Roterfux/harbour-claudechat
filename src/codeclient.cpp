@@ -3,10 +3,13 @@
 
 #include <algorithm>
 
+#include <QDir>
+#include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QNetworkReply>
+#include <QStandardPaths>
 #include <QUrl>
 #include <QUrlQuery>
 #include <QUuid>
@@ -52,6 +55,15 @@ QVariantMap item(const QString &kind, const QString &text)
     m[QStringLiteral("fromUser")] = kind == QLatin1String("user");
     m[QStringLiteral("text")] = text;
     return m;
+}
+
+// Saved events per session, next to the chat cache (removed on log out).
+QString eventsFile(const QString &sessionId)
+{
+    QString safe = sessionId;
+    safe.replace(QLatin1Char('/'), QLatin1Char('_'));
+    return QStandardPaths::writableLocation(QStandardPaths::CacheLocation)
+           + QStringLiteral("/chats/code-") + safe + QStringLiteral(".json");
 }
 
 } // namespace
@@ -192,11 +204,43 @@ void CodeClient::openSession(const QString &id)
     m_events.clear();
     m_eventIds.clear();
     m_messages.clear();
+    m_lastEventId.clear();
+
+    // Events saved on the last visit: show them at once and fetch only the
+    // events added since then.
+    QFile f(eventsFile(id));
+    if (f.open(QIODevice::ReadOnly)) {
+        const QVariantMap saved = QJsonDocument::fromJson(f.readAll()).toVariant().toMap();
+        m_lastEventId = saved.value(QStringLiteral("lastId")).toString();
+        addEvents(saved.value(QStringLiteral("events")).toList());
+    }
+    const bool haveSaved = !m_events.isEmpty() && !m_lastEventId.isEmpty();
+    if (!haveSaved) {
+        m_events.clear();
+        m_eventIds.clear();
+        m_messages.clear();
+        m_lastEventId.clear();
+    }
     emit sessionChanged();
     emit messagesChanged();
-    setLoadingSession(true);
-    loadSession(false);
+    setLoadingSession(!haveSaved);
+    loadSession(haveSaved);
     m_poll.start();
+}
+
+void CodeClient::saveEvents()
+{
+    if (m_sessionId.isEmpty() || m_lastEventId.isEmpty())
+        return;
+    QDir().mkpath(QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + QStringLiteral("/chats"));
+    QVariantMap saved;
+    saved[QStringLiteral("lastId")] = m_lastEventId;
+    saved[QStringLiteral("events")] = m_events;
+    QFile f(eventsFile(m_sessionId));
+    if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        f.write(QJsonDocument::fromVariant(saved).toJson(QJsonDocument::Compact));
+        f.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner);
+    }
 }
 
 void CodeClient::setLoadingSession(bool on)
@@ -210,6 +254,7 @@ void CodeClient::setLoadingSession(bool on)
 void CodeClient::closeSession()
 {
     m_poll.stop();
+    saveEvents();
     setLoadingSession(false);
     m_sessionId.clear();
     emit sessionChanged();
@@ -245,7 +290,7 @@ void CodeClient::loadSession(bool quiet)
             m_sessionStatus = status;
             emit sessionChanged();
         }
-        loadEvents(m_eventIds.isEmpty() ? QString() : m_eventIds.last(), quiet);
+        loadEvents(m_lastEventId, quiet);
     });
 }
 
@@ -268,14 +313,20 @@ void CodeClient::loadEvents(const QString &afterId, bool quiet)
             return;
         }
         const QJsonObject page = QJsonDocument::fromJson(data).object();
-        addEvents(page.value(QStringLiteral("data")).toArray().toVariantList());
+        const QVariantList events = page.value(QStringLiteral("data")).toArray().toVariantList();
+        addEvents(events);
         if (m_loadingSession)
             emit loadingSessionChanged();   // loadedEvents grew
         const QString last = page.value(QStringLiteral("last_id")).toString();
-        if (page.value(QStringLiteral("has_more")).toBool() && !last.isEmpty())
+        if (!last.isEmpty())
+            m_lastEventId = last;
+        if (page.value(QStringLiteral("has_more")).toBool() && !last.isEmpty()) {
             loadEvents(last, quiet);
-        else
+        } else {
             setLoadingSession(false);
+            if (!events.isEmpty())
+                saveEvents();
+        }
     });
 }
 
